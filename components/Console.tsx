@@ -304,7 +304,11 @@ export function Console({
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <main className="max-w-[1400px] mx-auto px-4 py-5 flex flex-col gap-5">
+        {/* Full-width side-by-side speed race — the hero */}
+        <SpeedRace baselineLabel={baselineLabel} triggerStart={raceSignal} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <section className="lg:col-span-4 flex flex-col gap-4">
           {!hasKey && (
             <div className="panel p-3 text-[12px]" style={{ borderColor: "#fb5b6b55", background: "#fb5b6b0d" }}>
@@ -433,8 +437,6 @@ export function Console({
             {fatal && <p className="text-[11px] text-[var(--red)] mt-2 mono">{fatal}</p>}
           </div>
 
-          <SpeedRace baselineLabel={baselineLabel} triggerStart={raceSignal} />
-
           <div className="panel p-3 text-[11px] text-[var(--sub)] leading-relaxed">
             <span className="text-[var(--text)] font-semibold">How it works:</span> Stage 1 — OPTIC,
             TRACE &amp; ARCHIVE fan out <span style={{ color: "#34d399" }}>in parallel</span>. Stage 2
@@ -468,6 +470,7 @@ export function Console({
             <RemediationPanel report={report} service={selectedService} alertText={alertText} />
           </StageBlock>
         </section>
+        </div>
       </main>
 
       <footer className="max-w-[1400px] mx-auto px-4 py-6 text-[11px] text-[var(--sub)] text-center">
