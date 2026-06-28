@@ -12,7 +12,9 @@ export { CEREBRAS_LABEL };
 const RACE_PROMPT =
   "You are an SRE assistant. A production checkout service started throwing HTTP 5xx and its p99 latency spiked to ~2.4s right after a deploy that raised the database connection-pool size. Write a concise incident remediation runbook: the immediate mitigation, the exact rollback command, how to verify recovery, and one follow-up to prevent recurrence.";
 
-const RACE_MAX_TOKENS = 320;
+// A larger generation so output throughput (not fixed TTFT/network overhead)
+// dominates the head-to-head — and so both lanes are measured the same way.
+const RACE_MAX_TOKENS = 700;
 
 function estimateTokens(text: string): number {
   return Math.max(1, Math.round(text.length / 4));
@@ -67,7 +69,6 @@ async function streamReal(
     signal,
   })) as unknown as AsyncIterable<any>;
 
-  let cerebrasGenSeconds: number | null = null;
   for await (const chunk of stream) {
     const delta: string = chunk?.choices?.[0]?.delta?.content ?? "";
     if (delta) {
@@ -79,14 +80,14 @@ async function streamReal(
       emit({ type: "race_delta", provider: label, text: delta });
     }
     if (chunk?.usage?.completion_tokens) completion = chunk.usage.completion_tokens;
-    if (chunk?.time_info?.completion_time)
-      cerebrasGenSeconds = chunk.time_info.completion_time;
   }
 
   const totalMs = Date.now() - start;
   const ttftMs = firstAt ? firstAt - start : totalMs;
   const completionTokens = completion || estimateTokens(text);
-  const genSeconds = cerebrasGenSeconds ?? Math.max(0.001, (totalMs - ttftMs) / 1000);
+  // Identical wall-clock measurement for every provider (fair head-to-head):
+  // output tokens / (generation wall-clock, i.e. total minus time-to-first-token).
+  const genSeconds = Math.max(0.001, (totalMs - ttftMs) / 1000);
   const timing: Timing = {
     ttftMs,
     totalMs,
@@ -176,7 +177,9 @@ export async function runRace(emit: Emit, signal?: AbortSignal): Promise<void> {
   ]);
 
   if (cerebrasTiming && baselineTiming) {
-    const speedup = baselineTiming.totalMs / Math.max(1, cerebrasTiming.totalMs);
+    // Throughput ratio (tokens/sec), measured identically for both lanes.
+    const speedup =
+      cerebrasTiming.tokensPerSec / Math.max(1, baselineTiming.tokensPerSec);
     emit({
       type: "race_summary",
       speedup,
