@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚨 Mayday — AI Incident Commander
 
-## Getting Started
+**A swarm of 6 Gemma 4 31B agents triages your production incident in seconds — running on Cerebras.**
 
-First, run the development server:
+Built for the **Cerebras × Google DeepMind Gemma 4 24-Hour Hackathon**. Mayday turns an alert — a dashboard screenshot, raw logs, and a runbook — into a root-cause diagnosis, a safe remediation command, and a ready-to-paste Slack update. The whole investigation finishes in **~2.5 seconds** because every agent runs on Cerebras at **1,000–2,400 tokens/sec**.
+
+> Multimodal · multi-agent · speed-native. Targets **Track 1** (multi-agent + multimodal), **Track 3** (enterprise / incident response), and **Track 2** (People's Choice).
+
+---
+
+## The swarm
+
+| Stage | Agent | Codename | Does |
+|------|-------|----------|------|
+| 1 ‖ parallel | 👁️ Vision Analyst | **OPTIC** | Reads the alert dashboard **screenshot** (multimodal) |
+| 1 ‖ parallel | 📜 Log Analyst | **TRACE** | Finds the smoking gun in the logs |
+| 1 ‖ parallel | 📚 Runbook Retriever | **ARCHIVE** | Matches the relevant runbook section (and rejects distractors) |
+| 2 | 🧠 Root-Cause Analyst | **SHERLOCK** | Synthesizes a leading hypothesis with a causal chain |
+| 3 | 🛡️ Skeptic | **DEVIL** | **Adversarially challenges** the hypothesis before it's trusted |
+| 4 | 📣 Incident Commander | **MAYDAY** | Issues the final **structured** decision: severity, timeline, safe command, Slack update |
+
+Stage 1 fans out **in parallel** — the moment Cerebras speed compounds. Then SHERLOCK → DEVIL → MAYDAY run in sequence. Everything streams live to the UI.
+
+## Why Cerebras + Gemma 4
+
+- **Multimodal**: OPTIC reads a real Grafana-style dashboard via Gemma 4's `image_url` (base64) input.
+- **Structured outputs**: MAYDAY emits a strict-JSON decision (`response_format: json_schema, strict`).
+- **`time_info`**: every response carries real timing — we surface live **tokens/sec** + **TTFT**.
+- **Speed race**: a built-in side-by-side vs a real GPU provider (OpenRouter Gemma 3 27B) — typically **15–40× faster**.
+
+## Run it
 
 ```bash
+npm install
+cp .env.example .env.local      # then paste your CEREBRAS_API_KEY (csk-...)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open the app, click **load sample**, then **🚨 DISPATCH SWARM**. Or drop your own Grafana/Datadog screenshot + logs + runbook.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Var | Required | Notes |
+|-----|----------|-------|
+| `CEREBRAS_API_KEY` | ✅ | From [cloud.cerebras.ai](https://cloud.cerebras.ai). Model is `gemma-4-31b`. |
+| `BASELINE_API_KEY` / `BASELINE_BASE_URL` / `BASELINE_MODEL` / `BASELINE_LABEL` | optional | A real GPU provider for the speed race. Without it, a clearly-labeled representative baseline is shown. |
 
-## Learn More
+### Scripts
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+node --env-file=.env.local scripts/test-cerebras.mjs   # smoke-test the API (chat, streaming, image, structured)
+node scripts/gen-dashboard.mjs                          # regenerate the sample dashboard PNG
+npm run build                                           # production build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+app/
+  page.tsx                  server entry → <Console/>
+  api/incident/route.ts     SSE: runs the swarm, streams every token
+  api/race/route.ts         SSE: Cerebras vs GPU speed race
+  api/{config,scenario}     UI bootstrap
+lib/
+  cerebras.ts               OpenAI client → Cerebras; streamAgent + runCommander (structured)
+  orchestrator.ts           the 4-stage fan-out, emits StreamEvents
+  agents.ts / roster.ts     system prompts (server) + roster metadata (client)
+  race.ts                   speed-race runner
+  data/                     agent-prompts.json · scenario.json
+components/                 Console, AgentCard, SpeedHud, CommanderPanel, SpeedRace
+scripts/gen-dashboard.mjs   builds the Grafana-style sample dashboard
+docs/                       DEMO_SCRIPT.md · SOCIAL.md · SUBMISSION.md
+```
 
-## Deploy on Vercel
+## Demo & submission
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) (60-second video), [`docs/SOCIAL.md`](docs/SOCIAL.md) (X launch thread), and [`docs/SUBMISSION.md`](docs/SUBMISSION.md) (full writeup).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+*Built on Gemma 4 31B running on Cerebras. `#Gemma4`*
