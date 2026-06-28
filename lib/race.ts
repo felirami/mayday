@@ -46,7 +46,8 @@ async function streamReal(
   label: string,
   emit: Emit,
   signal?: AbortSignal,
-  legacyMaxTokens = false
+  legacyMaxTokens = false,
+  providerPin?: string
 ): Promise<Timing> {
   const start = Date.now();
   let firstAt: number | null = null;
@@ -64,6 +65,14 @@ async function streamReal(
   // Some OpenAI-compatible GPU providers (e.g. OpenRouter) expect max_tokens;
   // Cerebras rejects it, so only add it for the baseline.
   if (legacyMaxTokens) params.max_tokens = RACE_MAX_TOKENS;
+  // Pin OpenRouter to an ordered list of representative bf16 GPU providers so the
+  // baseline is fair + reproducible (deterministic first choice) but resilient if
+  // the top provider hiccups. allow_fallbacks:false keeps it within this list
+  // (never falls through to an AI-chip like SambaNova or a fast outlier).
+  if (providerPin) {
+    const order = providerPin.split(",").map((s) => s.trim()).filter(Boolean);
+    params.provider = { order, allow_fallbacks: false };
+  }
 
   const stream = (await client.chat.completions.create(params as never, {
     signal,
@@ -169,7 +178,15 @@ export async function runRace(emit: Emit, signal?: AbortSignal): Promise<void> {
       return null;
     }),
     baseline
-      ? streamReal(baseline.client, baseline.model, oppLabel, emit, signal, true).catch((e) => {
+      ? streamReal(
+          baseline.client,
+          baseline.model,
+          oppLabel,
+          emit,
+          signal,
+          true,
+          process.env.BASELINE_PROVIDER || undefined
+        ).catch((e) => {
           emit({ type: "race_error", provider: oppLabel, message: (e as Error).message });
           return null;
         })

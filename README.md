@@ -26,7 +26,7 @@ Stage 1 fans out **in parallel** — the moment Cerebras speed compounds. Then S
 - **Multimodal**: OPTIC reads a real Grafana-style dashboard via Gemma 4's `image_url` (base64) input.
 - **Structured outputs**: MAYDAY emits a strict-JSON decision (`response_format: json_schema, strict`).
 - **`time_info`**: every response carries real timing — we surface live **tokens/sec** + **TTFT**.
-- **Speed race**: a built-in side-by-side running the **same model** — Gemma 4 31B on Cerebras vs Gemma 4 31B on a GPU (OpenRouter) — typically **15–40× faster**.
+- **Speed race**: a built-in side-by-side running the **same model** — Gemma 4 31B on Cerebras vs the same model on a reputable **full-precision (bf16) GPU** provider (W&B Inference via OpenRouter, pinned for a fair + reproducible comparison; not an AI-chip competitor), measured identically on both lanes — typically **~20–40× faster** on output throughput.
 
 ## Proof — it generalizes
 
