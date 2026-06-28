@@ -206,4 +206,22 @@ Mayday is built to compete across all three tracks; here's exactly how it maps t
 
 ---
 
+## Prior art & how Mayday is different
+
+AI-assisted incident response is a validated, high-value space — **Resolve.ai** ($1B valuation, Feb 2026), **incident.io AI SRE**, **Rootly**, **Cleric**, **Neubird**, and the open-source CNCF project **HolmesGPT** all operate here. We see that as proof the problem matters, not a reason to avoid it. The hackathon's own Track 3 names "incident response" as a target enterprise problem.
+
+Mayday is built from scratch and is **not** a fork or reskin of any of these. Against the closest open-source comparable, HolmesGPT:
+
+| | HolmesGPT (closest OSS) | **Mayday** |
+|---|---|---|
+| Architecture | single agentic loop | **6 specialized agents, parallel fan-out** |
+| Multimodal | no vision | **reads the alert dashboard screenshot** (Gemma 4 vision) |
+| Verification | none | **adversarial DEVIL agent** challenges the hypothesis |
+| Inference | OpenAI / Anthropic / Gemini | **Gemma 4 31B on Cerebras** (~2s, with a live GPU speed race) |
+| Input | live telemetry tool-calls | pasted screenshot + logs + runbook (works without integrations) |
+
+Each of those four differences maps directly to this hackathon's thesis — **multimodal + multi-agent + Cerebras speed** — which is exactly why Mayday is a fit for it rather than a generic SRE tool.
+
+---
+
 *Mayday — because when production is on fire, you shouldn't have to wait on your tools.*
