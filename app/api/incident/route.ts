@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { hasCerebrasKey } from "@/lib/cerebras";
 import { runIncident } from "@/lib/orchestrator";
 import { scenarioIncident } from "@/lib/scenario";
+import { clientKey, rateLimit } from "@/lib/ratelimit";
 import type { IncidentInput, StreamEvent } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -13,6 +14,14 @@ export async function POST(req: NextRequest) {
     return Response.json(
       { error: "CEREBRAS_API_KEY is not set on the server." },
       { status: 503 }
+    );
+  }
+
+  const rl = rateLimit(clientKey(req, "incident"), 12, 60_000);
+  if (!rl.ok) {
+    return Response.json(
+      { error: `Rate limit reached — try again in ${rl.retryAfter}s.` },
+      { status: 429, headers: { "retry-after": String(rl.retryAfter) } }
     );
   }
 
