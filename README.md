@@ -28,6 +28,17 @@ Stage 1 fans out **in parallel** — the moment Cerebras speed compounds. Then S
 - **`time_info`**: every response carries real timing — we surface live **tokens/sec** + **TTFT**.
 - **Speed race**: a built-in side-by-side vs a real GPU provider (OpenRouter Gemma 3 27B) — typically **15–40× faster**.
 
+## Proof — it generalizes
+
+Mayday is validated on **7 real-world incidents across 2 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+
+- **Ops / SRE (5):** DB connection-pool exhaustion, Redis cache stampede, a memory-leak OOM storm, a bad feature-flag rollout, and a downstream / 3rd-party outage.
+- **Security / SOC (2):** distributed credential stuffing and data exfiltration via a compromised credential.
+
+The *same* 6-agent swarm handles all of them — and picks the **right class of fix each time** (rollback vs. disable-the-flag vs. fail-over vs. contain), which is the test of real reasoning rather than pattern-matching. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 judge:
+
+> **7 / 7 correctly diagnosed · avg ~2.6s per incident · peak ~3,000 tok/s.** → [docs/EVAL.md](docs/EVAL.md)
+
 ## Run it
 
 ```bash
@@ -49,7 +60,8 @@ Open the app, click **load sample**, then **🚨 DISPATCH SWARM**. Or drop your 
 
 ```bash
 node --env-file=.env.local scripts/test-cerebras.mjs   # smoke-test the API (chat, streaming, image, structured)
-node scripts/gen-dashboard.mjs                          # regenerate the sample dashboard PNG
+node --env-file=.env.local scripts/eval.mjs <baseUrl>  # run the 7-incident accuracy eval -> docs/EVAL.md
+node scripts/gen-dashboards.mjs                         # regenerate all scenario dashboard PNGs
 npm run build                                           # production build
 ```
 

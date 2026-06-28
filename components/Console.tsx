@@ -226,6 +226,8 @@ export function Console({
         const params = new URLSearchParams(window.location.search);
         const wanted = params.get("scenario");
         const startId = list.find((s) => s.id === wanted)?.id ?? list[0].id;
+        const startDomain = list.find((s) => s.id === startId)?.domain;
+        if (startDomain === "ops" || startDomain === "soc") setDomain(startDomain);
         await loadScenario(startId);
         if (params.has("run")) void runFullDemo(startId);
       } catch {

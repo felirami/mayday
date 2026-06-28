@@ -206,6 +206,19 @@ Mayday is built to compete across all three tracks; here's exactly how it maps t
 
 ---
 
+## Proof it works — and that it generalizes
+
+Mayday isn't one cherry-picked demo. It's validated on **7 real-world incidents across 2 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+
+- **Ops / SRE (5):** DB connection-pool exhaustion · Redis cache stampede · a memory-leak OOM storm · a bad feature-flag rollout · a downstream/3rd-party outage.
+- **Security / SOC (2):** distributed credential stuffing · data exfiltration via a compromised credential.
+
+The *same* six-agent swarm — no domain-specific agents — handles all seven, and it chooses the **correct class of remediation each time**: rollback, disable-the-feature-flag, fail-over (correctly concluding "it's not us"), and security containment. That diversity is the real test: a system that always says "roll it back" would fail the feature-flag and downstream cases. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 LLM judge:
+
+> **7/7 correctly diagnosed · avg ~2.6s per incident · peak ~3,000 tok/s.** (see `docs/EVAL.md`)
+
+This is the platform story: Mayday is a **multimodal diagnostic swarm** — *read the signals → fan out specialists → synthesize → adversarially verify → decide safely* — and incident response is just the flagship. The SOC domain (the same swarm triaging a live breach) is direct evidence it extends to cybersecurity, another Track 3 target.
+
 ## Prior art & how Mayday is different
 
 AI-assisted incident response is a validated, high-value space — **Resolve.ai** ($1B valuation, Feb 2026), **incident.io AI SRE**, **Rootly**, **Cleric**, **Neubird**, and the open-source CNCF project **HolmesGPT** all operate here. We see that as proof the problem matters, not a reason to avoid it. The hackathon's own Track 3 names "incident response" as a target enterprise problem.
