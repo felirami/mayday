@@ -10,6 +10,8 @@ import flag from "./data/scenarios/feature-flag.json";
 import dep from "./data/scenarios/downstream-dep.json";
 import credStuffing from "./data/scenarios/cred-stuffing.json";
 import dataExfil from "./data/scenarios/data-exfil.json";
+import costSpike from "./data/scenarios/finops-cost-spike.json";
+import idleGpu from "./data/scenarios/finops-idle-gpu.json";
 import dashboards from "./data/dashboards.b64.json";
 
 export interface Scenario {
@@ -37,6 +39,8 @@ const ALL = [
   dep,
   credStuffing,
   dataExfil,
+  costSpike,
+  idleGpu,
 ] as unknown as Scenario[];
 const DASH = dashboards as Record<string, { mime: string; base64: string }>;
 const byId = new Map(ALL.map((s) => [s.id, s]));

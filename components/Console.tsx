@@ -42,6 +42,13 @@ const SEV_COLOR: Record<string, string> = {
   SEV3: "#38bdf8",
 };
 
+const DOMAIN_LABELS: Record<string, string> = {
+  ops: "⚙ Ops / SRE",
+  soc: "🛡 Security / SOC",
+  fin: "💸 FinOps / Cost",
+};
+const DOMAIN_ORDER = ["ops", "soc", "fin"];
+
 function freshAgents(): AgentMap {
   return AGENT_IDS.reduce((acc, id) => {
     acc[id] = { status: "idle", text: "" };
@@ -67,7 +74,7 @@ export function Console({
 }) {
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [scenarioId, setScenarioId] = useState<string | null>(null);
-  const [domain, setDomain] = useState<"ops" | "soc">("ops");
+  const [domain, setDomain] = useState<string>("ops");
 
   const [alertText, setAlertText] = useState("");
   const [logs, setLogs] = useState("");
@@ -228,7 +235,7 @@ export function Console({
         const wanted = params.get("scenario");
         const startId = list.find((s) => s.id === wanted)?.id ?? list[0].id;
         const startDomain = list.find((s) => s.id === startId)?.domain;
-        if (startDomain === "ops" || startDomain === "soc") setDomain(startDomain);
+        if (startDomain) setDomain(startDomain);
         await loadScenario(startId);
         if (params.has("run")) void runFullDemo(startId);
       } catch {
@@ -271,9 +278,9 @@ export function Console({
               rel="noopener noreferrer"
               className="mono text-[11px] font-bold px-2.5 py-2 rounded-lg hidden md:flex items-center gap-1.5"
               style={{ background: "#34d39912", color: "#34d399", border: "1px solid #34d39944" }}
-              title="7/7 incidents correctly diagnosed in the accuracy eval · avg ~2.6s"
+              title="9/9 incidents correctly diagnosed across 3 domains in the accuracy eval · avg ~2.3s"
             >
-              ✓ 7/7 verified
+              ✓ 9/9 verified
             </a>
             <button
               onClick={() => runFullDemo()}
@@ -320,12 +327,8 @@ export function Console({
 
             {/* Domain toggle */}
             <div className="flex gap-1.5 mb-2">
-              {(
-                [
-                  ["ops", "⚙ Ops / SRE"],
-                  ["soc", "🛡 Security / SOC"],
-                ] as const
-              ).map(([d, label]) => {
+              {DOMAIN_ORDER.filter((d) => scenarios.some((s) => s.domain === d)).map((d) => {
+                const label = DOMAIN_LABELS[d] ?? d;
                 const count = scenarios.filter((s) => s.domain === d).length;
                 const active = domain === d;
                 return (

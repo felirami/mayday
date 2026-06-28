@@ -1,0 +1,40 @@
+{
+  "id": "finops-idle-gpu",
+  "domain": "fin",
+  "title": "ml-training — orphaned A100 cluster burning $4.6k/day idle",
+  "service": "ml-training-adhoc-7f2",
+  "severity": "SEV3",
+  "remediationClass": "cost-fix",
+  "alertText": "[CloudWatch Billing] TRIGGERED · SEV3 · ml-platform\nIdle-resource cost anomaly (anomaly-detector #BA-7795)\nGPU spend: $4,600/day sustained · 16 x A100 (p4d) running\nGPU utilization ~3% · active training jobs = 0 (cluster idle for ~3 days)\nCluster 'ml-training-adhoc-7f2' launched manually Mon 09:14 (no TTL); its job completed Tue 11:40\nNo scheduled or queued jobs reference this cluster\nAck: @finops-oncall · Opened Fri 08:05 UTC",
+  "dashboardSubtitle": "ml-platform · us-west-2 · Mon–Fri",
+  "dashboardSpec": "Cost board 'ml-platform / gpu': GPU spend climbs to ~$4.6k/day when the 16x A100 cluster launches Monday and stays flat all week; running GPU instances jump 0 -> 16 and stay; GPU utilization is high Mon–Tue during the job then collapses to ~3% after the job finishes Tuesday; active training jobs go 1 -> 0. 16 GPUs, 0 jobs, ~3% util = an orphaned cluster.",
+  "logs": "Mon 09:14  mlctl     INFO   cluster 'ml-training-adhoc-7f2' created by user e.navarro via adhoc launch script (16x p4d.24xlarge / A100); no TTL / no auto-teardown policy set\nMon 09:20  scheduler INFO   job 'finetune-ranker-v3' started on ml-training-adhoc-7f2 (1 active job)\nTue 11:40  scheduler INFO   job 'finetune-ranker-v3' COMPLETED; checkpoints uploaded to s3://models/ranker-v3\nTue 11:41  scheduler INFO   active jobs on ml-training-adhoc-7f2 = 0; cluster NOT torn down\nWed 00:00  cloudwatch INFO  ml-training-adhoc-7f2 avg GPU utilization = 2.9% (idle); 16 instances still InService\nThu 00:00  cloudwatch INFO  ml-training-adhoc-7f2 avg GPU utilization = 3.1% (idle); 16 instances still InService\nFri 08:00  billing   WARN   ml-training-adhoc-7f2 run-rate = $4,600/day for ~3 days idle (~$13,800 wasted)\nFri 08:02  scheduler INFO   no scheduled or queued jobs reference ml-training-adhoc-7f2",
+  "runbookMarkdown": "# ml-platform — Cost Runbook\n\n## 1. Orphaned / idle GPU cluster\nSymptoms: GPU instances running with near-zero utilization and zero active jobs, usually a manually-launched ad-hoc cluster with no TTL. After confirming there are no active, scheduled, or queued jobs on it, terminate the cluster: `mlctl cluster terminate <name>`. Then add an auto-teardown / idle policy so it can't recur: `mlctl policy set auto-teardown --idle 1h`. Notify the owner.\n\n## 2. Active training (DISTRACTOR — verify first)\nApplies when there ARE running jobs. Here active jobs = 0 and utilization is ~3%; the cluster is idle.\n\n## 3. Reserved GPU capacity (DISTRACTOR — verify first)\nApplies when GPUs are pre-purchased/committed and terminating them won't save money. These are on-demand p4d instances; terminating stops the spend immediately.",
+  "groundTruthRootCause": "A 16x A100 ad-hoc training cluster ('ml-training-adhoc-7f2') was launched manually Monday with no TTL/auto-teardown. Its job ('finetune-ranker-v3') completed Tuesday, but the cluster was never torn down, so 16 A100s have run idle (~3% GPU utilization, 0 active/scheduled jobs) for ~3 days at ~$4,600/day (~$13.8k wasted). It is an orphaned resource, not active work or committed capacity.",
+  "expectedRemediation": "mlctl cluster terminate ml-training-adhoc-7f2 && mlctl policy set auto-teardown --idle 1h",
+  "expectedSlackUpdate": ":moneybag: SEV3 COST — orphaned GPU cluster 'ml-training-adhoc-7f2' idle ~3 days. 16x A100 at ~3% util, 0 active jobs, $4.6k/day (~$13.8k wasted). Its job finished Tue and the cluster was never torn down (manual launch, no TTL). Action: terminating the cluster now + adding an idle auto-teardown policy. Notifying owner @e.navarro. No production impact. IC: @finops-oncall",
+  "annotation": { "t": 0.28, "label": "job finished — idle after", "color": "#fade2a" },
+  "ticks": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+  "panels": [
+    {
+      "title": "GPU spend ($/day)", "stat": "$4.6k/day", "statColor": "#f2495c",
+      "yMax": 5500, "yTicks": [0, 1250, 2500, 3750, 5000],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 90, "points": [[0,120],[0.08,4600],[1,4600]] }]
+    },
+    {
+      "title": "running GPU instances (A100)", "stat": "16 × A100", "statColor": "#ff9830",
+      "yMax": 20, "yTicks": [0, 5, 10, 15, 20],
+      "series": [{ "color": "#ff9830", "fill": true, "width": 2, "points": [[0,0],[0.08,16],[1,16]] }]
+    },
+    {
+      "title": "GPU utilization (%)", "stat": "3%", "statColor": "#f2495c",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#5794f2", "fill": true, "jitter": 2, "points": [[0,5],[0.08,92],[0.25,90],[0.3,3],[1,3]] }]
+    },
+    {
+      "title": "active training jobs", "stat": "0 jobs", "statColor": "#f2495c",
+      "yMax": 2, "yTicks": [0, 1, 2],
+      "series": [{ "color": "#b877d9", "width": 2.5, "points": [[0,0],[0.08,1],[0.25,1],[0.3,0],[1,0]] }]
+    }
+  ]
+}

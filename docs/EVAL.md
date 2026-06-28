@@ -2,17 +2,19 @@
 
 Every scenario run end-to-end through the live 6-agent swarm on Gemma 4 31B / Cerebras, graded by a Gemma-4 LLM judge against hand-written ground truth.
 
-**Result: 7/7 incidents correctly diagnosed · avg 2.61s per incident · peak 3005 tok/s.**
+**Result: 9/9 incidents correctly diagnosed · avg 2.32s per incident · peak 2966 tok/s.**
 
 | Incident | Severity (got/exp) | Root cause | Remediation | Time | Peak tok/s |
 |---|---|---|---|---|---|
-| `cred-stuffing` (auth-service) | SEV1 / SEV2 | ✅ | ✅ | 3.07s | 1417 |
-| `data-exfil` (warehouse-api) | SEV1 / SEV1 | ✅ | ✅ | 2.86s | 3005 |
-| `db-pool` (checkout-service) | SEV1 / SEV2 | ✅ | ✅ | 2.44s | 2402 |
-| `downstream-dep` (payments-service) | SEV1 / SEV1 | ✅ | ✅ | 2.34s | 1565 |
-| `feature-flag` (search-service) | SEV2 / SEV2 | ✅ | ✅ | 2.55s | 2419 |
-| `oom-leak` (image-resizer) | SEV2 / SEV2 | ✅ | ✅ | 2.51s | 2246 |
-| `redis-stampede` (catalog-service) | SEV1 / SEV2 | ✅ | ✅ | 2.53s | 1851 |
+| `cred-stuffing` (auth-service) | SEV1 / SEV2 | ✅ | ✅ | 2.58s | 2769 |
+| `data-exfil` (warehouse-api) | SEV1 / SEV1 | ✅ | ✅ | 2.31s | 2966 |
+| `db-pool` (checkout-service) | SEV1 / SEV2 | ✅ | ✅ | 2.26s | 2412 |
+| `downstream-dep` (payments-service) | SEV1 / SEV1 | ✅ | ✅ | 2.42s | 2080 |
+| `feature-flag` (search-service) | SEV2 / SEV2 | ✅ | ✅ | 2.30s | 2369 |
+| `finops-cost-spike` (prod-api-asg) | SEV2 / SEV2 | ✅ | ✅ | 2.51s | 2519 |
+| `finops-idle-gpu` (ml-training-adhoc-7f2) | SEV3 / SEV3 | ✅ | ✅ | 2.17s | 2576 |
+| `oom-leak` (image-resizer) | SEV2 / SEV2 | ✅ | ✅ | 2.15s | 2279 |
+| `redis-stampede` (catalog-service) | SEV2 / SEV2 | ✅ | ✅ | 2.18s | 2485 |
 
 ### Remediation diversity (proof it's not one trick)
 
@@ -21,6 +23,8 @@ Every scenario run end-to-end through the live 6-agent swarm on Gemma 4 31B / Ce
 - **checkout-service** — rollback: `kubectl rollout undo deploy/checkout-service`
 - **payments-service** — failover: `payments-cli failover --acquirer acquirer-backup  (+ keep circuit breaker open; do NOT roll back)`
 - **search-service** — flag-kill: `flagcli disable new_ranker_v2 --env prod`
+- **prod-api-asg** — cost-fix: `aws autoscaling update-auto-scaling-group --auto-scaling-group-name prod-api-asg --desired-capacity 8 --max-size 12`
+- **ml-training-adhoc-7f2** — cost-fix: `mlctl cluster terminate ml-training-adhoc-7f2 && mlctl policy set auto-teardown --idle 1h`
 - **image-resizer** — rollback: `kubectl rollout undo deploy/image-resizer`
 - **catalog-service** — rollback: `kubectl rollout undo deploy/catalog-service`
 

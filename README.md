@@ -30,14 +30,15 @@ Stage 1 fans out **in parallel** — the moment Cerebras speed compounds. Then S
 
 ## Proof — it generalizes
 
-Mayday is validated on **7 real-world incidents across 2 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+Mayday is validated on **9 real-world incidents across 3 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
 
 - **Ops / SRE (5):** DB connection-pool exhaustion, Redis cache stampede, a memory-leak OOM storm, a bad feature-flag rollout, and a downstream / 3rd-party outage.
 - **Security / SOC (2):** distributed credential stuffing and data exfiltration via a compromised credential.
+- **FinOps / Cost (2):** an over-provisioned ASG after a bad Terraform apply, and an orphaned idle GPU cluster.
 
-The *same* 6-agent swarm handles all of them — and picks the **right class of fix each time** (rollback vs. disable-the-flag vs. fail-over vs. contain), which is the test of real reasoning rather than pattern-matching. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 judge:
+The *same* 6-agent swarm handles all of them — and picks the **right class of fix each time** across five remediation classes (rollback · disable-the-flag · fail-over · contain · cost-fix), which is the test of real reasoning rather than pattern-matching. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 judge:
 
-> **7 / 7 correctly diagnosed · avg ~2.6s per incident · peak ~3,000 tok/s.** → [docs/EVAL.md](docs/EVAL.md)
+> **9 / 9 correctly diagnosed · avg ~2.3s per incident · peak ~3,000 tok/s.** → [docs/EVAL.md](docs/EVAL.md)
 
 ## Run it
 

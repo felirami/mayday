@@ -1,0 +1,40 @@
+{
+  "id": "finops-cost-spike",
+  "domain": "fin",
+  "title": "prod-api-asg cost spike — over-provisioned after a Terraform apply",
+  "service": "prod-api-asg",
+  "severity": "SEV2",
+  "remediationClass": "cost-fix",
+  "alertText": "[CloudWatch Billing] TRIGGERED · SEV2 · prod-aws-account\nCost anomaly detected (anomaly-detector #BA-7781)\nRun-rate: $1,180/day -> $9,800/day (8.3x) · EC2 driving 96% of the increase\nprod-api-asg instance count: 8 -> 140 · avg CPU utilization 55% -> 6% (instances idle)\nRequest rate flat ~1,000 rps (no traffic increase to justify scale-out)\nCorrelated change: terraform apply @ 15:02 UTC (workspace: prod-api)\nAck: @finops-oncall · Opened 15:20 UTC",
+  "dashboardSubtitle": "prod-aws-account · us-east-1 · 13:00–17:00 UTC",
+  "dashboardSpec": "Cost board 'prod-api / spend': daily run-rate spikes $1.18k -> $9.8k at the terraform-apply marker; EC2 instance count jumps 8 -> 140; average CPU utilization collapses 55% -> 6% (the new instances are idle); request rate stays flat ~1,000 rps. High cost + low utilization + flat traffic = over-provisioning, not load.",
+  "logs": "15:02:11  terraform  INFO   Apply: aws_autoscaling_group.prod_api ~ desired_capacity: 8 -> 140, max_size: 12 -> 200\n15:02:11  terraform  INFO   (plan authored by a find/replace that also bumped desired_capacity; intended change was an AMI id)\n15:02:45  autoscaling INFO   prod-api-asg launching 132 instances to reach desired_capacity=140\n15:06:20  autoscaling INFO   prod-api-asg now InService=140\n15:10:00  cloudwatch  INFO   prod-api avg CPUUtilization = 6.1% (was ~55%); 134 instances effectively idle\n15:12:30  alb         INFO   request rate = 1,002 rps (flat; no change vs last week)\n15:18:40  billing     WARN   EC2 on-demand run-rate = $408/hr (was ~$49/hr); projected $9,800/day\n15:19:10  billing     INFO   no Reserved Instance / Savings Plan expiry in window; increase is pure on-demand capacity\n15:20:02  finops      INFO   prod-api-asg right-sized count for 1,000 rps at p95 SLO = ~8 instances",
+  "runbookMarkdown": "# prod-api — Cost Runbook\n\n## 1. Cost spike from over-provisioned capacity\nSymptoms: cost run-rate jumps, instance/replica count jumps, but CPU utilization DROPS and traffic is flat — you are paying for idle capacity. Find the change that raised capacity (autoscaling desired_capacity, HPA minReplicas, a Terraform apply) and revert it. Safe fix: set desired_capacity back to the right-sized value, e.g. `aws autoscaling update-auto-scaling-group --auto-scaling-group-name prod-api-asg --desired-capacity 8 --max-size 12`. Then add a budget/anomaly guardrail.\n\n## 2. Traffic-driven autoscaling (DISTRACTOR — verify first)\nApplies when request rate rose and CPU is high — legitimate scale-out. Here traffic is flat and CPU is 6%; this is not load.\n\n## 3. Reserved Instance / Savings Plan expiry (DISTRACTOR — verify first)\nApplies when a commitment lapses and on-demand replaces it at the same usage. Here usage (instance count) itself jumped 8 -> 140; no commitment expired.",
+  "groundTruthRootCause": "A Terraform apply on the prod-api workspace changed prod-api-asg desired_capacity from 8 to 140 (an unintended edit — a find/replace meant to bump an AMI id also changed desired_capacity), over-provisioning the ASG. 140 instances now run at ~6% CPU serving a flat ~1,000 rps, so on-demand run-rate jumped ~8.3x ($1.18k -> $9.8k/day) for zero benefit. It's an IaC misconfiguration / over-provisioning, not traffic-driven scaling or a commitment expiry.",
+  "expectedRemediation": "aws autoscaling update-auto-scaling-group --auto-scaling-group-name prod-api-asg --desired-capacity 8 --max-size 12",
+  "expectedSlackUpdate": ":moneybag: SEV2 COST — prod-api-asg over-provisioned since 15:02 UTC. Run-rate $1.18k -> $9.8k/day (8.3x), 140 instances at 6% CPU on flat ~1k rps. Root cause: terraform apply bumped desired_capacity 8 -> 140 (unintended edit). Action: right-sizing desired_capacity back to 8 / max 12 + adding a budget-anomaly guardrail. No outage; this is pure waste. Next update 15:40. IC: @finops-oncall",
+  "annotation": { "t": 0.5, "label": "terraform apply", "color": "#fade2a" },
+  "ticks": ["13:00", "14:00", "15:00", "16:00", "17:00"],
+  "panels": [
+    {
+      "title": "spend run-rate ($/day)", "stat": "$9.8k/day", "statColor": "#f2495c",
+      "yMax": 11000, "yTicks": [0, 2500, 5000, 7500, 10000],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 200, "points": [[0,1180],[0.5,1180],[0.6,9800],[1,9700]] }]
+    },
+    {
+      "title": "EC2 instance count", "stat": "140", "statColor": "#ff9830",
+      "yMax": 160, "yTicks": [0, 40, 80, 120, 160],
+      "series": [{ "color": "#ff9830", "fill": true, "width": 2, "points": [[0,8],[0.5,8],[0.58,140],[1,140]] }]
+    },
+    {
+      "title": "avg CPU utilization (%)", "stat": "6%", "statColor": "#f2495c",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#5794f2", "fill": true, "jitter": 3, "points": [[0,55],[0.5,55],[0.6,6],[1,6]] }]
+    },
+    {
+      "title": "request rate (rps)", "stat": "1.0k rps", "statColor": "#73bf69",
+      "yMax": 2000, "yTicks": [0, 500, 1000, 1500, 2000],
+      "series": [{ "color": "#73bf69", "fill": true, "fillOpacity": 0.12, "jitter": 70, "points": [[0,1000],[1,1005]] }]
+    }
+  ]
+}

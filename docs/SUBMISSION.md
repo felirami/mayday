@@ -208,14 +208,15 @@ Mayday is built to compete across all three tracks; here's exactly how it maps t
 
 ## Proof it works — and that it generalizes
 
-Mayday isn't one cherry-picked demo. It's validated on **7 real-world incidents across 2 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+Mayday isn't one cherry-picked demo. It's validated on **9 real-world incidents across 3 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
 
 - **Ops / SRE (5):** DB connection-pool exhaustion · Redis cache stampede · a memory-leak OOM storm · a bad feature-flag rollout · a downstream/3rd-party outage.
 - **Security / SOC (2):** distributed credential stuffing · data exfiltration via a compromised credential.
+- **FinOps / Cost (2):** an over-provisioned ASG after a bad Terraform apply · an orphaned idle GPU cluster.
 
-The *same* six-agent swarm — no domain-specific agents — handles all seven, and it chooses the **correct class of remediation each time**: rollback, disable-the-feature-flag, fail-over (correctly concluding "it's not us"), and security containment. That diversity is the real test: a system that always says "roll it back" would fail the feature-flag and downstream cases. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 LLM judge:
+The *same* six-agent swarm — no domain-specific agents — handles all nine, and it chooses the **correct class of remediation each time** across five classes: rollback, disable-the-feature-flag, fail-over (correctly concluding "it's not us"), security containment, and cost right-sizing. That diversity is the real test: a system that always says "roll it back" would fail the feature-flag, downstream, security, and cost cases. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 LLM judge:
 
-> **7/7 correctly diagnosed · avg ~2.6s per incident · peak ~3,000 tok/s.** (see `docs/EVAL.md`)
+> **9/9 correctly diagnosed · avg ~2.3s per incident · peak ~3,000 tok/s.** (see `docs/EVAL.md`)
 
 This is the platform story: Mayday is a **multimodal diagnostic swarm** — *read the signals → fan out specialists → synthesize → adversarially verify → decide safely* — and incident response is just the flagship. The SOC domain (the same swarm triaging a live breach) is direct evidence it extends to cybersecurity, another Track 3 target.
 
