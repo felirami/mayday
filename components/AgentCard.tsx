@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import type { AgentMeta, Timing } from "@/lib/types";
+import { Markdown } from "./Markdown";
 
 export interface AgentCardState {
   status: "idle" | "running" | "done" | "error";
@@ -107,14 +108,14 @@ export function AgentCard({
 
       <div
         ref={scrollRef}
-        className={`stream-scroll px-3 py-2.5 text-[12.5px] leading-relaxed text-[var(--text)] whitespace-pre-wrap overflow-y-auto ${
+        className={`stream-scroll px-3 py-2.5 text-[12.5px] leading-relaxed text-[var(--text)] overflow-y-auto ${
           compact ? "h-[120px]" : "h-[170px]"
         }`}
       >
         {error ? (
           <span className="text-[var(--red)]">{state.error ?? "failed"}</span>
         ) : state.text ? (
-          <span className="opacity-95">{state.text}</span>
+          <Markdown className="opacity-95">{state.text}</Markdown>
         ) : (
           <span className="text-[var(--sub)] italic">
             {running ? "" : "awaiting dispatch…"}

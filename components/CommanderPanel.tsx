@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { CommanderReport, Timing } from "@/lib/types";
+import { Markdown } from "./Markdown";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -97,7 +98,7 @@ export function CommanderPanel({
             </span>
           </div>
           <div className="text-[11px] text-[var(--sub)] mt-2 leading-snug">
-            {report.blastRadius}
+            <Markdown>{report.blastRadius}</Markdown>
           </div>
         </div>
       </div>
@@ -121,9 +122,9 @@ export function CommanderPanel({
           </code>
           <CopyButton text={report.remediation.command} />
         </div>
-        <p className="text-[11.5px] text-[var(--sub)] mt-1.5 leading-snug">
-          {report.remediation.rationale}
-        </p>
+        <div className="text-[11.5px] text-[var(--sub)] mt-1.5 leading-snug">
+          <Markdown>{report.remediation.rationale}</Markdown>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -163,7 +164,9 @@ function Field({ label, value, span }: { label: string; value: string; span?: nu
   return (
     <div className={`panel bg-[var(--panel-2)] p-2.5 ${span === 2 ? "sm:col-span-2" : ""}`}>
       <div className="text-[10px] uppercase tracking-wider text-[var(--sub)] mb-1.5">{label}</div>
-      <div className="text-[12.5px] leading-relaxed text-[var(--text)] opacity-95">{value}</div>
+      <div className="text-[12.5px] leading-relaxed text-[var(--text)] opacity-95">
+        <Markdown>{value}</Markdown>
+      </div>
     </div>
   );
 }
