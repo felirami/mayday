@@ -12,6 +12,7 @@ import { AgentCard, type AgentCardState } from "./AgentCard";
 import { SpeedHud } from "./SpeedHud";
 import { CommanderPanel } from "./CommanderPanel";
 import { SpeedRace } from "./SpeedRace";
+import { RemediationPanel } from "./RemediationPanel";
 
 type AgentMap = Record<AgentId, AgentCardState>;
 type Summary = Extract<StreamEvent, { type: "summary" }>;
@@ -243,6 +244,8 @@ export function Console({
   const doneCount = AGENT_IDS.filter((id) => agents[id].status === "done").length;
   const liveTps = elapsedMs > 0 ? liveCharsRef.current / 4 / (elapsedMs / 1000) : 0;
   const hasInput = !!scenarioId || !!alertText || !!logs || !!runbook || !!imageBase64;
+  const selectedService =
+    scenarios.find((s) => s.id === scenarioId)?.service ?? "the affected service";
 
   return (
     <div className="min-h-screen">
@@ -262,6 +265,16 @@ export function Console({
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href="https://github.com/felirami/mayday/blob/main/docs/EVAL.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mono text-[11px] font-bold px-2.5 py-2 rounded-lg hidden md:flex items-center gap-1.5"
+              style={{ background: "#34d39912", color: "#34d399", border: "1px solid #34d39944" }}
+              title="7/7 incidents correctly diagnosed in the accuracy eval · avg ~2.6s"
+            >
+              ✓ 7/7 verified
+            </a>
             <button
               onClick={() => runFullDemo()}
               disabled={running || !hasKey}
@@ -446,6 +459,10 @@ export function Console({
 
           <StageBlock n={4} title="COMMAND DECISION" hint="structured · safe">
             <CommanderPanel report={report} timing={reportTiming} />
+          </StageBlock>
+
+          <StageBlock n={5} title="REMEDIATION" hint="human-in-the-loop · executes &amp; verifies">
+            <RemediationPanel report={report} service={selectedService} alertText={alertText} />
           </StageBlock>
         </section>
       </main>

@@ -82,6 +82,12 @@ export type StreamEvent =
   | { type: "done" }
   | { type: "fatal"; message: string };
 
+export type OperatorEvent =
+  | { type: "op_start" }
+  | { type: "op_tool"; name: string; args: Record<string, unknown>; result: string }
+  | { type: "op_done"; text: string; timing: Timing }
+  | { type: "op_error"; message: string };
+
 export type RaceEvent =
   | { type: "race_start"; providers: string[] }
   | { type: "race_first_token"; provider: string; ttftMs: number }
