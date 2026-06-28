@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { streamSSE } from "@/lib/sse";
 import { CEREBRAS_LABEL } from "@/lib/raceLabels";
 import type { RaceEvent, Timing } from "@/lib/types";
@@ -14,20 +14,30 @@ interface Lane {
   startedAt: number;
 }
 
-export function SpeedRace({ baselineLabel }: { baselineLabel: string }) {
+export function SpeedRace({
+  baselineLabel,
+  triggerStart,
+}: {
+  baselineLabel: string;
+  triggerStart?: number;
+}) {
   const [lanes, setLanes] = useState<Record<string, Lane>>({});
   const [running, setRunning] = useState(false);
   const [speedup, setSpeedup] = useState<number | null>(null);
+  const [, setTick] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  function reset() {
-    setLanes({});
-    setSpeedup(null);
-  }
+  // live ticking for the per-lane clocks
+  useEffect(() => {
+    if (!running) return;
+    const iv = setInterval(() => setTick((t) => t + 1), 60);
+    return () => clearInterval(iv);
+  }, [running]);
 
   async function start() {
     if (running) return;
-    reset();
+    setLanes({});
+    setSpeedup(null);
     setRunning(true);
     const ac = new AbortController();
     abortRef.current = ac;
@@ -50,10 +60,7 @@ export function SpeedRace({ baselineLabel }: { baselineLabel: string }) {
               if (!lane) return s;
               const text = lane.text + e.text;
               const secs = Math.max(0.001, (Date.now() - lane.startedAt) / 1000);
-              return {
-                ...s,
-                [e.provider]: { ...lane, text, liveTps: text.length / 4 / secs },
-              };
+              return { ...s, [e.provider]: { ...lane, text, liveTps: text.length / 4 / secs } };
             });
           } else if (e.type === "race_done") {
             setLanes((s) => ({
@@ -67,26 +74,29 @@ export function SpeedRace({ baselineLabel }: { baselineLabel: string }) {
         ac.signal
       );
     } catch {
-      /* surfaced via lanes staying empty */
+      /* errors surface as empty lanes */
     } finally {
       setRunning(false);
     }
   }
 
+  // external trigger (demo mode)
+  useEffect(() => {
+    if (triggerStart && triggerStart > 0) start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerStart]);
+
   const laneList = Object.values(lanes);
   const cerebras = lanes[CEREBRAS_LABEL];
+  const cerebrasDone = cerebras?.done;
 
   return (
     <div className="panel p-4">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="text-base">⚡</span>
-          <span className="mono text-[13px] font-bold tracking-wider text-[var(--text)]">
-            SPEED RACE
-          </span>
-          <span className="text-[11px] text-[var(--sub)]">
-            same prompt · Cerebras vs GPU
-          </span>
+          <span className="mono text-[13px] font-bold tracking-wider text-[var(--text)]">SPEED RACE</span>
+          <span className="text-[11px] text-[var(--sub)]">same prompt · Cerebras vs GPU</span>
         </div>
         <div className="flex items-center gap-3">
           {speedup && (
@@ -114,6 +124,9 @@ export function SpeedRace({ baselineLabel }: { baselineLabel: string }) {
             const l = lanes[lane.label];
             const isCerebras = lane.label === CEREBRAS_LABEL;
             const accent = isCerebras ? "#34d399" : "#8b909c";
+            const liveSecs = l ? (Date.now() - l.startedAt) / 1000 : 0;
+            const clock = l?.timing ? l.timing.totalMs / 1000 : liveSecs;
+            const stillGoing = l && !l.done && running;
             return (
               <div
                 key={lane.label}
@@ -125,28 +138,42 @@ export function SpeedRace({ baselineLabel }: { baselineLabel: string }) {
                     {isCerebras ? "🟢 " : "🐢 "}
                     {lane.label}
                   </span>
-                  <span className="mono text-[13px] font-bold tabular-nums" style={{ color: accent }}>
+                  <span
+                    className={`mono text-[13px] font-bold tabular-nums ${isCerebras && l?.done ? "glow-num" : ""}`}
+                    style={{ color: accent }}
+                  >
                     {l ? Math.round((l.done ? l.timing?.tokensPerSec ?? 0 : l.liveTps) || 0) : 0} tok/s
                   </span>
                 </div>
                 <div className="stream-scroll px-3 py-2 text-[11.5px] leading-relaxed h-[150px] overflow-y-auto whitespace-pre-wrap text-[var(--text)] opacity-90">
                   {l?.text || <span className="text-[var(--sub)] italic">idle</span>}
-                  {l && !l.done && running && (
-                    <span className="blink" style={{ color: accent }}>▋</span>
-                  )}
+                  {stillGoing && <span className="blink" style={{ color: accent }}>▋</span>}
                 </div>
-                <div className="px-3 py-1.5 border-t border-[var(--border)] mono text-[10px] text-[var(--sub)] flex justify-between">
-                  <span>{l?.ttftMs ? `${Math.round(l.ttftMs)}ms to first token` : "—"}</span>
-                  <span>{l?.timing ? `${(l.timing.totalMs / 1000).toFixed(2)}s total` : ""}</span>
+                <div className="px-3 py-1.5 border-t border-[var(--border)] mono text-[10px] flex justify-between items-center">
+                  <span className="text-[var(--sub)]">
+                    {l?.ttftMs ? `${Math.round(l.ttftMs)}ms TTFT` : "—"}
+                  </span>
+                  <span
+                    className="tabular-nums font-bold"
+                    style={{ color: l?.done ? accent : stillGoing ? "#fbbf24" : "var(--sub)" }}
+                  >
+                    {l?.done ? `✓ ${clock.toFixed(2)}s` : stillGoing ? `▮ ${clock.toFixed(1)}s` : ""}
+                  </span>
                 </div>
               </div>
             );
           }
         )}
       </div>
-      {cerebras?.done && (
+      {cerebrasDone && (
         <p className="text-[11px] text-[var(--sub)] mt-2">
-          Both ran Gemma-class generation on the same prompt. Cerebras streams faster than you can read.
+          {running ? (
+            <span style={{ color: "#34d399" }}>
+              Cerebras already finished — the GPU is still streaming. ⏳
+            </span>
+          ) : (
+            "Same Gemma-class generation, same prompt. Cerebras streams faster than you can read."
+          )}
         </p>
       )}
     </div>

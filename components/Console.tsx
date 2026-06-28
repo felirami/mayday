@@ -62,6 +62,7 @@ export function Console({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [running, setRunning] = useState(false);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [raceSignal, setRaceSignal] = useState(0);
 
   const [peakTps, setPeakTps] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -153,7 +154,7 @@ export function Console({
     }
   }, []);
 
-  async function dispatch() {
+  async function dispatch(bodyOverride?: Record<string, unknown>) {
     if (running || !hasKey) return;
     // reset
     setAgents(freshAgents());
@@ -168,7 +169,8 @@ export function Console({
     setRunning(true);
 
     const body =
-      useScenario && !imageBase64
+      bodyOverride ??
+      (useScenario && !imageBase64
         ? { scenario: true }
         : {
             alertText: alertText || undefined,
@@ -176,7 +178,7 @@ export function Console({
             runbook: runbook || undefined,
             imageBase64: imageBase64 || undefined,
             imageMime: imageMime || undefined,
-          };
+          });
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -189,6 +191,23 @@ export function Console({
       setElapsedMs(Date.now() - startRef.current);
     }
   }
+
+  // One-click demo: load the sample, run the swarm, then fire the speed race.
+  async function runFullDemo() {
+    if (running) return;
+    await loadSample();
+    await dispatch({ scenario: true });
+    setTimeout(() => setRaceSignal((n) => n + 1), 1200);
+  }
+
+  // URL triggers for clean recording: ?run=1 (full auto) or ?demo=1 (preload).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.has("run")) void runFullDemo();
+    else if (p.has("demo")) void loadSample();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const doneCount = AGENT_IDS.filter((id) => agents[id].status === "done").length;
   const liveTps = elapsedMs > 0 ? liveCharsRef.current / 4 / (elapsedMs / 1000) : 0;
@@ -215,15 +234,26 @@ export function Console({
               </p>
             </div>
           </div>
-          <SpeedHud
-            running={running}
-            liveTps={liveTps}
-            elapsedMs={elapsedMs}
-            peakTps={peakTps}
-            doneCount={doneCount}
-            totalAgents={AGENT_IDS.length}
-            summary={summary}
-          />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={runFullDemo}
+              disabled={running || !hasKey}
+              className="mono text-[12px] font-bold px-3 py-2 rounded-lg transition-colors disabled:opacity-40 hidden sm:block"
+              style={{ background: "#34d39915", color: "#34d399", border: "1px solid #34d39955" }}
+              title="Load sample, run the swarm, then the speed race"
+            >
+              ▶ RUN DEMO
+            </button>
+            <SpeedHud
+              running={running}
+              liveTps={liveTps}
+              elapsedMs={elapsedMs}
+              peakTps={peakTps}
+              doneCount={doneCount}
+              totalAgents={AGENT_IDS.length}
+              summary={summary}
+            />
+          </div>
         </div>
       </header>
 
@@ -334,7 +364,7 @@ export function Console({
             )}
           </div>
 
-          <SpeedRace baselineLabel={baselineLabel} />
+          <SpeedRace baselineLabel={baselineLabel} triggerStart={raceSignal} />
 
           <div className="panel p-3 text-[11px] text-[var(--sub)] leading-relaxed">
             <span className="text-[var(--text)] font-semibold">How it works:</span>{" "}
