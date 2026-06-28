@@ -1,0 +1,40 @@
+{
+  "id": "cred-stuffing",
+  "domain": "soc",
+  "title": "auth-service — distributed credential-stuffing attack on /login",
+  "service": "auth-service",
+  "severity": "SEV2",
+  "remediationClass": "contain",
+  "alertText": "[SIEM] TRIGGERED · SEV2 · auth-service (security)\nAuthentication anomaly (detection rule: AUTH-BRUTE-014)\nFailed /login attempts: 45/min -> 9,200/min · unique source IPs: 12 -> 3,400\nAccount lockouts: 480 and climbing · 37 successful logins from never-seen IPs (possible ATO)\nSource concentration: 94% from ASN AS204957 (bulletproof hosting) · UA: 'python-requests/2.31'\nEnv: production · Endpoint: POST /login\nAck: @soc-oncall · Opened 02:44 UTC",
+  "dashboardSubtitle": "prod · SIEM · 02:20–02:40 UTC",
+  "dashboardSpec": "SIEM board 'auth-service / security': failed logins/min spikes 45 -> 9,200 at the attack-onset marker; unique source IPs spikes 12 -> 3,400 (highly distributed); account lockouts climb to 480; successful logins from new IPs climb to 37 (account takeovers). The service itself is up — this is an attack pattern, not an outage.",
+  "logs": "02:31:05  auth-service  WARN   POST /login 401 invalid_credentials user=a.chen@acme.io src=185.220.101.44 ua=python-requests/2.31 asn=AS204957\n02:31:05  auth-service  WARN   POST /login 401 invalid_credentials user=b.okoro@acme.io src=185.220.101.77 ua=python-requests/2.31 asn=AS204957\n02:31:06  auth-service  INFO   failed_login rate (1m) = 9,213/min (baseline 45) across 3,400 distinct src IPs\n02:31:09  auth-service  WARN   password-spray pattern: 1 password attempt per account across a large user list (low-and-slow per IP, high in aggregate)\n02:31:20  auth-service  WARN   account locked (5 failed attempts): user=c.diaz@acme.io (lockouts=480 and rising)\n02:31:33  auth-service  ALERT  POST /login 200 SUCCESS user=d.patel@acme.io src=185.220.101.91 asn=AS204957 — new device, new geo (possible ATO)\n02:31:48  auth-service  INFO   successful logins from never-seen IPs in window = 37 (likely compromised accounts)\n02:32:02  auth-service  INFO   94% of attempts originate from ASN AS204957 (known bulletproof hosting)\n02:32:30  auth-service  INFO   service health: p99 120ms, CPU 41% — auth-service is UP (this is abuse traffic, not an outage)\n02:33:10  waf           INFO   no rate-limit rule active on POST /login (login endpoint excluded from default WAF policy)",
+  "runbookMarkdown": "# auth-service — Security Runbook\n\n## 1. Credential stuffing / password spray\nSymptoms: failed-login rate spikes from many distinct IPs (often one ASN), scripted user-agent, account lockouts climbing, and some successful logins from new IPs (account takeover). The service is healthy — it's abuse, not an outage. Contain immediately:\n- Enable the WAF/adaptive rate-limit rule on POST /login.\n- Block the offending ASN / IP ranges at the edge.\n- Force step-up MFA on all sessions; revoke sessions and force password reset for accounts that were taken over.\n- Do NOT roll back or restart auth-service — it is functioning correctly.\n\n## 2. Service outage (DISTRACTOR — verify first)\nApplies when auth-service is erroring/slow due to its own fault. Here p99 and CPU are nominal; the service is up.\n\n## 3. Datastore issue (DISTRACTOR — verify first)\nApplies when the user/session store is failing. No datastore errors here.",
+  "groundTruthRootCause": "A distributed credential-stuffing / password-spray attack against POST /login: ~9,200 failed attempts/min from 3,400 IPs concentrated in ASN AS204957 (bulletproof hosting), using a scripted 'python-requests' user-agent. The login endpoint had no WAF rate-limit rule, so the attack got through, locking out 480 accounts and taking over 37. auth-service itself is healthy (p99 120ms, CPU 41%) — this is malicious traffic, not an outage or code defect.",
+  "expectedRemediation": "secctl waf enable rule=login-ratelimit && secctl block --asn AS204957 && authctl force-mfa --scope all && authctl revoke-sessions --accounts compromised",
+  "expectedSlackUpdate": ":rotating_light: SEV2 SECURITY — auth-service under credential-stuffing attack since ~02:31 UTC. 9.2k failed logins/min from 3,400 IPs (94% ASN AS204957), 480 lockouts, 37 account takeovers. auth-service is healthy — this is abuse. Action: enabling WAF login rate-limit, blocking AS204957, forcing step-up MFA, revoking 37 compromised sessions + forcing reset. Do NOT restart/roll back. Next update 03:00. IC: @soc-oncall",
+  "annotation": { "t": 0.45, "label": "attack onset", "color": "#f2495c" },
+  "ticks": ["02:20", "02:25", "02:30", "02:35", "02:40"],
+  "panels": [
+    {
+      "title": "failed logins / min", "stat": "9.2k/min", "statColor": "#f2495c",
+      "yMax": 10000, "yTicks": [0, 2500, 5000, 7500, 10000],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 280, "points": [[0,45],[0.45,45],[0.55,9200],[1,9000]] }]
+    },
+    {
+      "title": "unique source IPs / min", "stat": "3,400", "statColor": "#ff9830",
+      "yMax": 4000, "yTicks": [0, 1000, 2000, 3000, 4000],
+      "series": [{ "color": "#ff9830", "fill": true, "jitter": 120, "points": [[0,12],[0.45,12],[0.56,3400],[1,3350]] }]
+    },
+    {
+      "title": "account lockouts (count)", "stat": "480", "statColor": "#fade2a",
+      "yMax": 600, "yTicks": [0, 150, 300, 450, 600],
+      "series": [{ "color": "#fade2a", "fill": true, "width": 2, "points": [[0,0],[0.45,0],[0.6,300],[1,480]] }]
+    },
+    {
+      "title": "account takeovers — logins from new IPs", "stat": "37 ATO", "statColor": "#b877d9",
+      "yMax": 50, "yTicks": [0, 10, 20, 30, 40],
+      "series": [{ "color": "#b877d9", "fill": true, "width": 2, "points": [[0,0],[0.48,0],[0.6,18],[1,37]] }]
+    }
+  ]
+}

@@ -2,18 +2,22 @@
 
 Every scenario run end-to-end through the live 6-agent swarm on Gemma 4 31B / Cerebras, graded by a Gemma-4 LLM judge against hand-written ground truth.
 
-**Result: 5/5 incidents correctly diagnosed · avg 2.45s per incident · peak 2389 tok/s.**
+**Result: 7/7 incidents correctly diagnosed · avg 2.61s per incident · peak 3005 tok/s.**
 
 | Incident | Severity (got/exp) | Root cause | Remediation | Time | Peak tok/s |
 |---|---|---|---|---|---|
-| `db-pool` (checkout-service) | SEV1 / SEV2 | ✅ | ✅ | 2.55s | 1696 |
-| `downstream-dep` (payments-service) | SEV1 / SEV1 | ✅ | ✅ | 2.45s | 2109 |
-| `feature-flag` (search-service) | SEV2 / SEV2 | ✅ | ✅ | 2.42s | 2389 |
-| `oom-leak` (image-resizer) | SEV2 / SEV2 | ✅ | ✅ | 2.32s | 2280 |
-| `redis-stampede` (catalog-service) | SEV1 / SEV2 | ✅ | ✅ | 2.50s | 2161 |
+| `cred-stuffing` (auth-service) | SEV1 / SEV2 | ✅ | ✅ | 3.07s | 1417 |
+| `data-exfil` (warehouse-api) | SEV1 / SEV1 | ✅ | ✅ | 2.86s | 3005 |
+| `db-pool` (checkout-service) | SEV1 / SEV2 | ✅ | ✅ | 2.44s | 2402 |
+| `downstream-dep` (payments-service) | SEV1 / SEV1 | ✅ | ✅ | 2.34s | 1565 |
+| `feature-flag` (search-service) | SEV2 / SEV2 | ✅ | ✅ | 2.55s | 2419 |
+| `oom-leak` (image-resizer) | SEV2 / SEV2 | ✅ | ✅ | 2.51s | 2246 |
+| `redis-stampede` (catalog-service) | SEV1 / SEV2 | ✅ | ✅ | 2.53s | 1851 |
 
 ### Remediation diversity (proof it's not one trick)
 
+- **auth-service** — contain: `secctl waf enable rule=login-ratelimit && secctl block --asn AS204957 && authctl force-mfa --scope all && authctl revoke-sessions --accounts compromised`
+- **warehouse-api** — contain: `secctl revoke-token svc-etl-readonly && secctl block-egress --dest 185.220.101.0/24 && secctl rotate-cred svc-etl-readonly && secctl snapshot --forensics`
 - **checkout-service** — rollback: `kubectl rollout undo deploy/checkout-service`
 - **payments-service** — failover: `payments-cli failover --acquirer acquirer-backup  (+ keep circuit breaker open; do NOT roll back)`
 - **search-service** — flag-kill: `flagcli disable new_ranker_v2 --env prod`

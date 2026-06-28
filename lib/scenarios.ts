@@ -8,6 +8,8 @@ import redis from "./data/scenarios/redis-stampede.json";
 import oom from "./data/scenarios/oom-leak.json";
 import flag from "./data/scenarios/feature-flag.json";
 import dep from "./data/scenarios/downstream-dep.json";
+import credStuffing from "./data/scenarios/cred-stuffing.json";
+import dataExfil from "./data/scenarios/data-exfil.json";
 import dashboards from "./data/dashboards.b64.json";
 
 export interface Scenario {
@@ -27,7 +29,15 @@ export interface Scenario {
   expectedSlackUpdate: string;
 }
 
-const ALL = [dbPool, redis, oom, flag, dep] as unknown as Scenario[];
+const ALL = [
+  dbPool,
+  redis,
+  oom,
+  flag,
+  dep,
+  credStuffing,
+  dataExfil,
+] as unknown as Scenario[];
 const DASH = dashboards as Record<string, { mime: string; base64: string }>;
 const byId = new Map(ALL.map((s) => [s.id, s]));
 

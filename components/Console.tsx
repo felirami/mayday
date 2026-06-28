@@ -66,6 +66,7 @@ export function Console({
 }) {
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [scenarioId, setScenarioId] = useState<string | null>(null);
+  const [domain, setDomain] = useState<"ops" | "soc">("ops");
 
   const [alertText, setAlertText] = useState("");
   const [logs, setLogs] = useState("");
@@ -302,9 +303,41 @@ export function Console({
               </span>
             </div>
 
+            {/* Domain toggle */}
+            <div className="flex gap-1.5 mb-2">
+              {(
+                [
+                  ["ops", "⚙ Ops / SRE"],
+                  ["soc", "🛡 Security / SOC"],
+                ] as const
+              ).map(([d, label]) => {
+                const count = scenarios.filter((s) => s.domain === d).length;
+                const active = domain === d;
+                return (
+                  <button
+                    key={d}
+                    onClick={() => {
+                      setDomain(d);
+                      const first = scenarios.find((s) => s.domain === d);
+                      if (first) loadScenario(first.id);
+                    }}
+                    disabled={running}
+                    className="mono text-[11px] px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+                    style={{
+                      background: active ? "#fb5b6b14" : "var(--panel-2)",
+                      color: active ? "#fb7185" : "var(--sub)",
+                      border: `1px solid ${active ? "#fb5b6b55" : "var(--border)"}`,
+                    }}
+                  >
+                    {label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Scenario picker */}
             <div className="flex flex-col gap-1.5 mb-3">
-              {scenarios.map((s) => {
+              {scenarios.filter((s) => s.domain === domain).map((s) => {
                 const active = s.id === scenarioId;
                 const sev = SEV_COLOR[s.severity] ?? "#fb5b6b";
                 return (

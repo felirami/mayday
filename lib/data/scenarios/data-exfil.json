@@ -1,0 +1,40 @@
+{
+  "id": "data-exfil",
+  "domain": "soc",
+  "title": "warehouse-api — data exfiltration via compromised service account",
+  "service": "warehouse-api",
+  "severity": "SEV1",
+  "remediationClass": "contain",
+  "alertText": "[SIEM] TRIGGERED · SEV1 · warehouse-api (security)\nAnomalous data egress (detection rule: DLP-EXFIL-007)\nOutbound egress: 2 GB/h -> 182 GB/h · 160 GB to unrecognized external dest 185.220.101.0/24\nPII rows scanned: 0.05M/min -> 4.1M/min (customers, payment_methods)\nService account 'svc-etl-readonly': 5 calls/min -> 2,800/min, used from a NEW IP (ASN AS204957), midday (normally a 02:00 batch job)\nEnv: production\nAck: @soc-oncall · Opened 13:18 UTC",
+  "dashboardSubtitle": "prod · SIEM / DLP · 13:00–13:20 UTC",
+  "dashboardSpec": "SIEM/DLP board 'warehouse-api / data-egress': outbound egress spikes 2 -> 182 GB/h at the anomaly marker; PII rows scanned/min spikes to 4.1M; 160 GB transferred to an unrecognized external destination; the normally-quiet 'svc-etl-readonly' service account spikes to 2,800 calls/min. Infrastructure is healthy — this is exfiltration, not a performance issue.",
+  "logs": "13:06:12  warehouse-api  AUTH   token 'svc-etl-readonly' used from src=185.220.101.51 asn=AS204957 (token last rotated 412 days ago; normal use: nightly 02:00 batch from 10.0.x)\n13:06:20  warehouse-api  QUERY  svc-etl-readonly: SELECT * FROM customers  (full table, 18.4M rows) — no LIMIT\n13:06:48  warehouse-api  QUERY  svc-etl-readonly: SELECT pan_token, billing_address FROM payment_methods  (full table)\n13:07:30  egress-proxy   ALERT  185.220.101.51 dst egress = 182 GB/h (baseline 2 GB/h); destination not in allowlist\n13:08:05  egress-proxy   INFO   185.220.101.0/24 = unrecognized hosting range (ASN AS204957)\n13:08:40  warehouse-api  INFO   query pattern = bulk export of PII tables; access pattern inconsistent with the scheduled ETL job (wrong time, wrong source, wrong destination)\n13:09:15  warehouse-api  INFO   DB CPU 46%, replica lag nominal — infrastructure healthy\n13:10:02  iam            INFO   svc-etl-readonly scope = read-only analytics; no infra change/deploy in window\n13:11:20  egress-proxy   WARN   cumulative egress to 185.220.101.0/24 = 160 GB",
+  "runbookMarkdown": "# warehouse-api — Security Runbook\n\n## 1. Data exfiltration via compromised credential\nSymptoms: a service-account/token suddenly active from a new IP/ASN at an unusual time, bulk reads of PII tables (no LIMIT), and large egress to an unrecognized external destination, while infrastructure is healthy. This is a breach in progress — contain immediately, in this order:\n- Revoke the abused token/credential NOW (`secctl revoke-token svc-etl-readonly`).\n- Block egress to the destination range at the proxy/firewall.\n- Rotate the credential and audit everything it could access.\n- Snapshot logs/state for forensics and page the security IC; begin breach-notification assessment.\nDo NOT roll back or restart the service — the infrastructure is fine; the credential is the problem.\n\n## 2. Scheduled backup / ETL (DISTRACTOR — verify first)\nThe nightly ETL runs at 02:00 from an internal 10.0.x source to an internal warehouse. This activity is midday, from an external ASN, to an unrecognized destination — it is NOT the backup job.\n\n## 3. Analytics traffic spike (DISTRACTOR — verify first)\nApplies to legitimate query load. Bulk PII reads exported to an external host are not analytics.",
+  "groundTruthRootCause": "The 'svc-etl-readonly' service-account credential has been compromised and is being used to exfiltrate data: it is active from a new external IP (ASN AS204957) at midday (its normal use is a 02:00 internal batch), running un-LIMITed bulk SELECTs over PII tables (customers, payment_methods) and shipping ~160 GB to an unrecognized external destination. Infrastructure is healthy (DB CPU 46%, no deploy) — this is a credential-driven data breach, not a performance or reliability issue.",
+  "expectedRemediation": "secctl revoke-token svc-etl-readonly && secctl block-egress --dest 185.220.101.0/24 && secctl rotate-cred svc-etl-readonly && secctl snapshot --forensics",
+  "expectedSlackUpdate": ":rotating_light: SEV1 SECURITY — active data exfiltration on warehouse-api since ~13:06 UTC. Compromised service account 'svc-etl-readonly' (new external IP, ASN AS204957) bulk-reading PII (customers, payment_methods) and egressing ~160 GB to 185.220.101.0/24. Infra healthy — credential is the problem. Action: revoking token, blocking egress, rotating cred, forensic snapshot. Breach-notification assessment starting. Next update 13:35. IC: @soc-oncall",
+  "annotation": { "t": 0.5, "label": "anomaly onset", "color": "#f2495c" },
+  "ticks": ["13:00", "13:05", "13:10", "13:15", "13:20"],
+  "panels": [
+    {
+      "title": "outbound egress (GB/h)", "stat": "182 GB/h", "statColor": "#f2495c",
+      "yMax": 200, "yTicks": [0, 50, 100, 150, 200],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 5, "points": [[0,2],[0.5,2],[0.6,182],[1,178]] }]
+    },
+    {
+      "title": "PII rows scanned (millions/min)", "stat": "4.1M/min", "statColor": "#f2495c",
+      "yMax": 5, "yTicks": [0, 1, 2, 3, 4],
+      "series": [{ "color": "#ff9830", "fill": true, "jitter": 0.15, "points": [[0,0.05],[0.5,0.05],[0.6,4.1],[1,4.0]] }]
+    },
+    {
+      "title": "egress to unrecognized dest (GB)", "stat": "160 GB", "statColor": "#f2495c",
+      "yMax": 200, "yTicks": [0, 50, 100, 150, 200],
+      "series": [{ "color": "#b877d9", "fill": true, "width": 2, "points": [[0,0],[0.5,0],[0.62,90],[1,160]] }]
+    },
+    {
+      "title": "svc-etl-readonly API calls / min", "stat": "2.8k/min", "statColor": "#f2495c",
+      "yMax": 3200, "yTicks": [0, 800, 1600, 2400, 3200],
+      "series": [{ "color": "#56d3d8", "fill": true, "jitter": 90, "points": [[0,5],[0.5,5],[0.6,2800],[1,2750]] }]
+    }
+  ]
+}
