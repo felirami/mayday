@@ -346,7 +346,7 @@ export function Console({
             </Labeled>
 
             <button
-              onClick={dispatch}
+              onClick={() => dispatch()}
               disabled={running || !hasKey || !hasInput}
               className="w-full mt-1 py-3 rounded-lg font-bold text-[14px] tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
