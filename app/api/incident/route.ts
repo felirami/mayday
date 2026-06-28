@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { hasCerebrasKey } from "@/lib/cerebras";
 import { runIncident } from "@/lib/orchestrator";
-import { scenarioIncident } from "@/lib/scenario";
+import { DEFAULT_SCENARIO_ID, scenarioIncident } from "@/lib/scenarios";
 import { clientKey, rateLimit } from "@/lib/ratelimit";
 import type { IncidentInput, StreamEvent } from "@/lib/types";
 
@@ -26,8 +26,16 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}) as Record<string, unknown>);
-  const input: IncidentInput = body?.scenario
-    ? scenarioIncident()
+  // scenarioId (multi-scenario) or legacy `scenario: true` (default scenario)
+  const scenarioId =
+    typeof body.scenarioId === "string"
+      ? body.scenarioId
+      : body.scenario
+        ? DEFAULT_SCENARIO_ID
+        : null;
+
+  const input: IncidentInput = scenarioId
+    ? (scenarioIncident(scenarioId) ?? scenarioIncident(DEFAULT_SCENARIO_ID)!)
     : {
         alertText: typeof body.alertText === "string" ? body.alertText : undefined,
         logs: typeof body.logs === "string" ? body.logs : undefined,

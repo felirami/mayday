@@ -16,6 +16,16 @@ import { SpeedRace } from "./SpeedRace";
 type AgentMap = Record<AgentId, AgentCardState>;
 type Summary = Extract<StreamEvent, { type: "summary" }>;
 
+interface ScenarioSummary {
+  id: string;
+  domain: string;
+  title: string;
+  service: string;
+  severity: string;
+  remediationClass: string;
+  imageUrl: string;
+}
+
 const AGENT_IDS: AgentId[] = [
   "vision",
   "logs",
@@ -24,6 +34,12 @@ const AGENT_IDS: AgentId[] = [
   "skeptic",
   "commander",
 ];
+
+const SEV_COLOR: Record<string, string> = {
+  SEV1: "#fb5b6b",
+  SEV2: "#fbbf24",
+  SEV3: "#38bdf8",
+};
 
 function freshAgents(): AgentMap {
   return AGENT_IDS.reduce((acc, id) => {
@@ -48,13 +64,15 @@ export function Console({
   hasKey: boolean;
   baselineLabel: string;
 }) {
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+  const [scenarioId, setScenarioId] = useState<string | null>(null);
+
   const [alertText, setAlertText] = useState("");
   const [logs, setLogs] = useState("");
   const [runbook, setRunbook] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageMime, setImageMime] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [useScenario, setUseScenario] = useState(false);
 
   const [agents, setAgents] = useState<AgentMap>(freshAgents);
   const [report, setReport] = useState<CommanderReport | null>(null);
@@ -70,24 +88,23 @@ export function Console({
   const startRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
-  // live elapsed ticker
   useEffect(() => {
     if (!running) return;
     const iv = setInterval(() => setElapsedMs(Date.now() - startRef.current), 80);
     return () => clearInterval(iv);
   }, [running]);
 
-  const loadSample = useCallback(async () => {
+  const loadScenario = useCallback(async (id: string) => {
     try {
-      const res = await fetch("/api/scenario");
+      const res = await fetch(`/api/scenarios?id=${encodeURIComponent(id)}`);
       const s = await res.json();
+      setScenarioId(id);
       setAlertText(s.alertText ?? "");
       setLogs(s.logs ?? "");
       setRunbook(s.runbook ?? "");
       setImagePreview(s.imageUrl ?? null);
       setImageBase64(null);
       setImageMime(null);
-      setUseScenario(true);
     } catch {
       /* ignore */
     }
@@ -98,13 +115,11 @@ export function Console({
     reader.onload = () => {
       const result = reader.result as string;
       const comma = result.indexOf(",");
-      const meta = result.slice(0, comma);
-      const b64 = result.slice(comma + 1);
-      const mime = meta.match(/data:(.*);base64/)?.[1] ?? "image/png";
-      setImageBase64(b64);
+      const mime = result.slice(0, comma).match(/data:(.*);base64/)?.[1] ?? "image/png";
+      setImageBase64(result.slice(comma + 1));
       setImageMime(mime);
       setImagePreview(result);
-      setUseScenario(false);
+      setScenarioId(null); // now a custom incident
     };
     reader.readAsDataURL(file);
   }
@@ -124,20 +139,12 @@ export function Console({
       case "agent_done":
         setAgents((a) => ({
           ...a,
-          [e.id]: {
-            ...a[e.id],
-            status: "done",
-            text: a[e.id].text || e.text,
-            timing: e.timing,
-          },
+          [e.id]: { ...a[e.id], status: "done", text: a[e.id].text || e.text, timing: e.timing },
         }));
         setPeakTps((p) => Math.max(p, e.timing.tokensPerSec));
         break;
       case "agent_error":
-        setAgents((a) => ({
-          ...a,
-          [e.id]: { ...a[e.id], status: "error", error: e.message },
-        }));
+        setAgents((a) => ({ ...a, [e.id]: { ...a[e.id], status: "error", error: e.message } }));
         break;
       case "report":
         setReport(e.report);
@@ -154,68 +161,88 @@ export function Console({
     }
   }, []);
 
-  async function dispatch(bodyOverride?: Record<string, unknown>) {
-    if (running || !hasKey) return;
-    // reset
-    setAgents(freshAgents());
-    setReport(null);
-    setReportTiming(null);
-    setSummary(null);
-    setFatal(null);
-    setPeakTps(0);
-    setElapsedMs(0);
-    liveCharsRef.current = 0;
-    startRef.current = Date.now();
-    setRunning(true);
+  const dispatch = useCallback(
+    async (bodyOverride?: Record<string, unknown>) => {
+      if (!hasKey) return;
+      setAgents(freshAgents());
+      setReport(null);
+      setReportTiming(null);
+      setSummary(null);
+      setFatal(null);
+      setPeakTps(0);
+      setElapsedMs(0);
+      liveCharsRef.current = 0;
+      startRef.current = Date.now();
+      setRunning(true);
 
-    const body =
-      bodyOverride ??
-      (useScenario && !imageBase64
-        ? { scenario: true }
-        : {
-            alertText: alertText || undefined,
-            logs: logs || undefined,
-            runbook: runbook || undefined,
-            imageBase64: imageBase64 || undefined,
-            imageMime: imageMime || undefined,
-          });
+      const body =
+        bodyOverride ??
+        (scenarioId && !imageBase64
+          ? { scenarioId }
+          : {
+              alertText: alertText || undefined,
+              logs: logs || undefined,
+              runbook: runbook || undefined,
+              imageBase64: imageBase64 || undefined,
+              imageMime: imageMime || undefined,
+            });
 
-    const ac = new AbortController();
-    abortRef.current = ac;
-    try {
-      await streamSSE<StreamEvent>("/api/incident", body, onEvent, ac.signal);
-    } catch (err) {
-      setFatal((err as Error).message);
-    } finally {
-      setRunning(false);
-      setElapsedMs(Date.now() - startRef.current);
-    }
-  }
+      const ac = new AbortController();
+      abortRef.current = ac;
+      try {
+        await streamSSE<StreamEvent>("/api/incident", body, onEvent, ac.signal);
+      } catch (err) {
+        setFatal((err as Error).message);
+      } finally {
+        setRunning(false);
+        setElapsedMs(Date.now() - startRef.current);
+      }
+    },
+    [hasKey, scenarioId, imageBase64, alertText, logs, runbook, imageMime, onEvent]
+  );
 
-  // One-click demo: load the sample, run the swarm, then fire the speed race.
-  async function runFullDemo() {
-    if (running) return;
-    await loadSample();
-    await dispatch({ scenario: true });
-    setTimeout(() => setRaceSignal((n) => n + 1), 1200);
-  }
+  const runFullDemo = useCallback(
+    async (id?: string) => {
+      const sid = id ?? scenarioId ?? scenarios[0]?.id;
+      if (!sid) return;
+      await loadScenario(sid);
+      await dispatch({ scenarioId: sid });
+      setTimeout(() => setRaceSignal((n) => n + 1), 1200);
+    },
+    [scenarioId, scenarios, loadScenario, dispatch]
+  );
 
-  // URL triggers for clean recording: ?run=1 (full auto) or ?demo=1 (preload).
+  // Bootstrap: load the scenario list, select one, honor ?scenario / ?run / ?demo.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const p = new URLSearchParams(window.location.search);
-    if (p.has("run")) void runFullDemo();
-    else if (p.has("demo")) void loadSample();
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/scenarios");
+        const data = await res.json();
+        const list: ScenarioSummary[] = data.scenarios ?? [];
+        if (cancelled || !list.length) return;
+        setScenarios(list);
+        const params = new URLSearchParams(window.location.search);
+        const wanted = params.get("scenario");
+        const startId = list.find((s) => s.id === wanted)?.id ?? list[0].id;
+        await loadScenario(startId);
+        if (params.has("run")) void runFullDemo(startId);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const doneCount = AGENT_IDS.filter((id) => agents[id].status === "done").length;
   const liveTps = elapsedMs > 0 ? liveCharsRef.current / 4 / (elapsedMs / 1000) : 0;
-  const hasInput = useScenario || !!alertText || !!logs || !!runbook || !!imageBase64;
+  const hasInput = !!scenarioId || !!alertText || !!logs || !!runbook || !!imageBase64;
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur-md bg-[var(--bg)]/80 border-b border-[var(--border)]">
         <div className="max-w-[1400px] mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -224,23 +251,20 @@ export function Console({
               <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--red)]" />
             </span>
             <div>
-              <h1 className="text-lg font-bold tracking-tight leading-none">
-                MAYDAY
-              </h1>
+              <h1 className="text-lg font-bold tracking-tight leading-none">MAYDAY</h1>
               <p className="text-[11px] text-[var(--sub)] leading-tight mt-0.5">
-                AI Incident Commander ·{" "}
-                <span className="text-[var(--text)]">Gemma 4 31B</span> on{" "}
+                AI Incident Commander · <span className="text-[var(--text)]">Gemma 4 31B</span> on{" "}
                 <span style={{ color: "#fb7185" }}>Cerebras</span>
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={runFullDemo}
+              onClick={() => runFullDemo()}
               disabled={running || !hasKey}
               className="mono text-[12px] font-bold px-3 py-2 rounded-lg transition-colors disabled:opacity-40 hidden sm:block"
               style={{ background: "#34d39915", color: "#34d399", border: "1px solid #34d39955" }}
-              title="Load sample, run the swarm, then the speed race"
+              title="Load the selected incident, run the swarm, then the speed race"
             >
               ▶ RUN DEMO
             </button>
@@ -258,14 +282,12 @@ export function Console({
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: input + race */}
         <section className="lg:col-span-4 flex flex-col gap-4">
           {!hasKey && (
             <div className="panel p-3 text-[12px]" style={{ borderColor: "#fb5b6b55", background: "#fb5b6b0d" }}>
               <span className="text-[var(--red)] font-semibold">⚠ No API key.</span>{" "}
               <span className="text-[var(--sub)]">
-                Set <code className="mono">CEREBRAS_API_KEY</code> in{" "}
-                <code className="mono">.env.local</code> and restart.
+                Set <code className="mono">CEREBRAS_API_KEY</code> and restart.
               </span>
             </div>
           )}
@@ -275,32 +297,55 @@ export function Console({
               <span className="mono text-[12px] font-bold tracking-wider text-[var(--text)]">
                 🚨 INCIDENT INTAKE
               </span>
-              <button
-                onClick={loadSample}
-                disabled={running}
-                className="mono text-[11px] px-2 py-1 rounded border border-[var(--border)] text-[var(--sub)] hover:text-[var(--text)] hover:border-[var(--sub)] transition-colors disabled:opacity-50"
-              >
-                load sample ↻
-              </button>
+              <span className="mono text-[10px] text-[var(--sub)]">
+                {scenarios.length} real-world incidents
+              </span>
             </div>
 
-            {/* dashboard image */}
+            {/* Scenario picker */}
+            <div className="flex flex-col gap-1.5 mb-3">
+              {scenarios.map((s) => {
+                const active = s.id === scenarioId;
+                const sev = SEV_COLOR[s.severity] ?? "#fb5b6b";
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => loadScenario(s.id)}
+                    disabled={running}
+                    className="text-left panel px-2.5 py-2 flex items-center gap-2.5 transition-colors disabled:opacity-60"
+                    style={{
+                      background: active ? "#fb5b6b0f" : "var(--panel-2)",
+                      borderColor: active ? "#fb5b6b66" : "var(--border)",
+                    }}
+                  >
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: sev }} />
+                    <span className="min-w-0 flex-1">
+                      <span className="mono text-[11.5px] text-[var(--text)] truncate block">
+                        {s.service}
+                      </span>
+                      <span className="text-[10px] text-[var(--sub)] truncate block">{s.title}</span>
+                    </span>
+                    <span className="mono text-[9px] px-1.5 py-0.5 rounded shrink-0" style={{ color: sev, background: `${sev}1a` }}>
+                      {s.severity}
+                    </span>
+                    <span className="mono text-[9px] text-[var(--sub)] shrink-0 hidden xl:block">
+                      {s.remediationClass}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <label className="block mb-3">
               <span className="text-[10px] uppercase tracking-wider text-[var(--sub)]">
                 Alert dashboard (screenshot)
               </span>
-              <div className="mt-1.5 panel bg-[var(--panel-2)] border-dashed overflow-hidden relative h-[120px] flex items-center justify-center cursor-pointer hover:border-[var(--sub)] transition-colors">
+              <div className="mt-1.5 panel bg-[var(--panel-2)] border-dashed overflow-hidden relative h-[110px] flex items-center justify-center cursor-pointer hover:border-[var(--sub)] transition-colors">
                 {imagePreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={imagePreview}
-                    alt="alert dashboard"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={imagePreview} alt="alert dashboard" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-[var(--sub)] text-[12px]">
-                    drop a Grafana / Datadog screenshot, or load the sample
-                  </span>
+                  <span className="text-[var(--sub)] text-[12px]">drop a Grafana / Datadog screenshot</span>
                 )}
                 <input
                   type="file"
@@ -313,36 +358,13 @@ export function Console({
             </label>
 
             <Labeled label="Alert">
-              <textarea
-                value={alertText}
-                onChange={(e) => {
-                  setAlertText(e.target.value);
-                }}
-                placeholder="[PagerDuty] SEV2 — checkout-service p99 > 2s…"
-                rows={3}
-                disabled={running}
-                className="intake-ta"
-              />
+              <textarea value={alertText} onChange={(e) => { setAlertText(e.target.value); setScenarioId(null); }} rows={3} disabled={running} className="intake-ta" />
             </Labeled>
             <Labeled label="Logs">
-              <textarea
-                value={logs}
-                onChange={(e) => setLogs(e.target.value)}
-                placeholder="paste log excerpt…"
-                rows={4}
-                disabled={running}
-                className="intake-ta"
-              />
+              <textarea value={logs} onChange={(e) => { setLogs(e.target.value); setScenarioId(null); }} rows={4} disabled={running} className="intake-ta" />
             </Labeled>
             <Labeled label="Runbook">
-              <textarea
-                value={runbook}
-                onChange={(e) => setRunbook(e.target.value)}
-                placeholder="paste the on-call runbook…"
-                rows={3}
-                disabled={running}
-                className="intake-ta"
-              />
+              <textarea value={runbook} onChange={(e) => { setRunbook(e.target.value); setScenarioId(null); }} rows={3} disabled={running} className="intake-ta" />
             </Labeled>
 
             <button
@@ -350,33 +372,26 @@ export function Console({
               disabled={running || !hasKey || !hasInput}
               className="w-full mt-1 py-3 rounded-lg font-bold text-[14px] tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
-                background: running
-                  ? "#fb5b6b22"
-                  : "linear-gradient(180deg,#fb5b6b,#e23a4c)",
+                background: running ? "#fb5b6b22" : "linear-gradient(180deg,#fb5b6b,#e23a4c)",
                 color: running ? "#fb5b6b" : "#fff",
                 boxShadow: running ? "none" : "0 6px 24px #fb5b6b33",
               }}
             >
               {running ? "◉ SWARM ENGAGED…" : "🚨 DISPATCH SWARM"}
             </button>
-            {fatal && (
-              <p className="text-[11px] text-[var(--red)] mt-2 mono">{fatal}</p>
-            )}
+            {fatal && <p className="text-[11px] text-[var(--red)] mt-2 mono">{fatal}</p>}
           </div>
 
           <SpeedRace baselineLabel={baselineLabel} triggerStart={raceSignal} />
 
           <div className="panel p-3 text-[11px] text-[var(--sub)] leading-relaxed">
-            <span className="text-[var(--text)] font-semibold">How it works:</span>{" "}
-            Stage 1 — OPTIC, TRACE & ARCHIVE fan out{" "}
-            <span style={{ color: "#34d399" }}>in parallel</span>. Stage 2 —
-            SHERLOCK forms a hypothesis. Stage 3 — DEVIL challenges it. Stage 4 —
-            MAYDAY issues a structured, safe decision. All on Gemma 4 31B via
-            Cerebras.
+            <span className="text-[var(--text)] font-semibold">How it works:</span> Stage 1 — OPTIC,
+            TRACE &amp; ARCHIVE fan out <span style={{ color: "#34d399" }}>in parallel</span>. Stage 2
+            — SHERLOCK forms a hypothesis. Stage 3 — DEVIL challenges it. Stage 4 — MAYDAY issues a
+            structured, safe decision. All on Gemma 4 31B via Cerebras.
           </div>
         </section>
 
-        {/* Right: swarm + decision */}
         <section className="lg:col-span-8 flex flex-col gap-4">
           <StageBlock n={1} title="PARALLEL TRIAGE" hint="3 agents · simultaneously">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -391,11 +406,7 @@ export function Console({
           </StageBlock>
 
           <StageBlock n={3} title="ADVERSARIAL REVIEW" hint="the swarm argues">
-            <AgentCard
-              meta={AGENTS.skeptic}
-              state={agents.skeptic}
-              badge={skepticBadge(agents.skeptic.text)}
-            />
+            <AgentCard meta={AGENTS.skeptic} state={agents.skeptic} badge={skepticBadge(agents.skeptic.text)} />
           </StageBlock>
 
           <StageBlock n={4} title="COMMAND DECISION" hint="structured · safe">
@@ -405,8 +416,8 @@ export function Console({
       </main>
 
       <footer className="max-w-[1400px] mx-auto px-4 py-6 text-[11px] text-[var(--sub)] text-center">
-        Mayday · built for the Cerebras × Google DeepMind Gemma 4 Hackathon ·
-        multimodal · multi-agent · speed-native
+        Mayday · built for the Cerebras × Google DeepMind Gemma 4 Hackathon · multimodal · multi-agent
+        · speed-native
       </footer>
 
       <style jsx global>{`
@@ -435,9 +446,7 @@ export function Console({
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-2.5">
-      <span className="text-[10px] uppercase tracking-wider text-[var(--sub)]">
-        {label}
-      </span>
+      <span className="text-[10px] uppercase tracking-wider text-[var(--sub)]">{label}</span>
       {children}
     </div>
   );
@@ -460,9 +469,7 @@ function StageBlock({
         <span className="mono text-[10px] font-bold h-5 w-5 rounded grid place-items-center bg-[var(--panel)] border border-[var(--border)] text-[var(--sub)]">
           {n}
         </span>
-        <span className="mono text-[12px] font-bold tracking-wider text-[var(--text)]">
-          {title}
-        </span>
+        <span className="mono text-[12px] font-bold tracking-wider text-[var(--text)]">{title}</span>
         <span className="text-[11px] text-[var(--sub)]">— {hint}</span>
         <span className="flex-1 h-px bg-[var(--border)]" />
       </div>

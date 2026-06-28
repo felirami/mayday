@@ -1,0 +1,46 @@
+{
+  "id": "feature-flag",
+  "domain": "ops",
+  "title": "search-service 5xx tied to new_ranker_v2 flag rollout",
+  "service": "search-service",
+  "severity": "SEV2",
+  "remediationClass": "flag-kill",
+  "alertText": "[PagerDuty] TRIGGERED · SEV2 · search-service\nElevated 5xx on /search (datadog-monitor #52310)\n/search 5xx = 8.1% (baseline 0.1%) · errors step up in lockstep with a flag rollout\nOther endpoints (/cart, /checkout) nominal · p99 ~180ms · CPU/mem nominal\nNo deploy in the incident window. Feature flag 'new_ranker_v2' ramped 10% -> 50% @ 09:12 UTC.\nEnv: production · Region: eu-west-1\nAck: @oncall-search · Opened 09:16 UTC",
+  "dashboardSubtitle": "prod · eu-west-1 · 09:00–09:20 UTC",
+  "dashboardSpec": "Grafana 'search-service / errors': /search 5xx steps up exactly as the 'new_ranker_v2' feature-flag rollout goes 0% -> 10% -> 50%; /cart and /checkout stay flat near 0%; p99 latency stays ~180ms and CPU/memory stay nominal. There is NO deploy marker — the steps align with flag changes, not a release.",
+  "logs": "09:06:10  flag-service    INFO   Flag 'new_ranker_v2' rollout 0% -> 10% (targeting: random bucket)\n09:06:38  search-service  ERROR  GET /search 500 : java.lang.NullPointerException at RankerV2.score(RankerV2.java:88) — item.rank_score is null\n09:12:02  flag-service    INFO   Flag 'new_ranker_v2' rollout 10% -> 50%\n09:12:20  search-service  ERROR  GET /search 500 : java.lang.NullPointerException at RankerV2.score(RankerV2.java:88) — item.rank_score is null (catalog items pre-2024 lack rank_score)\n09:12:48  search-service  WARN   /search 5xx rate = 8.1% (only requests bucketed into new_ranker_v2)\n09:13:05  search-service  INFO   /cart 5xx = 0.1%, /checkout 5xx = 0.1% (unaffected)\n09:13:30  search-service  INFO   No deployment in window; image digest unchanged since 08:20\n09:14:10  search-service  INFO   CPU 31%, heap 44%, p99 /search 182ms (resources nominal; errors return fast)\n09:15:00  search-service  INFO   new_ranker_v1 path: 0 errors; new_ranker_v2 path: 8.1% errors",
+  "runbookMarkdown": "# search-service — On-call Runbook\n\n## 1. Errors that track a feature-flag rollout\nIf the error rate steps up in lockstep with a flag's rollout percentage, and there is NO deploy in the window, the flag is the cause. The fastest, safest mitigation is the kill switch — disable the flag; it takes effect in seconds with no deploy and no rollback: `flagcli disable new_ranker_v2 --env prod`.\n\n## 2. NullPointerException in a new code path\nA new ranker/path can assume a field that older data lacks (e.g. items missing `rank_score`). Disable the flag first to stop the bleeding, then fix forward with a null guard / backfill.\n\n## 3. Deploy rollback (DISTRACTOR — verify first)\nApplies when symptoms start at a deploy marker. Here the image digest is unchanged in the window — there is nothing to roll back; rolling back the (unrelated) last release would not help and only adds risk.\n\n## 4. Resource saturation (DISTRACTOR — verify first)\nApplies when CPU/mem/pool are saturated. Here all are nominal and only /search is affected.",
+  "groundTruthRootCause": "The 'new_ranker_v2' feature flag, ramped to 50%, routes requests through RankerV2.score(), which throws a NullPointerException for catalog items that lack a `rank_score` field (older pre-2024 items). Only requests bucketed into the flag fail, so /search 5xx tracks the rollout percentage (10% -> 50%) while other endpoints, latency, and resources stay normal. There was no deploy — it is a flag-gated code-path bug, not a release or resource issue.",
+  "expectedRemediation": "flagcli disable new_ranker_v2 --env prod",
+  "expectedSlackUpdate": ":rotating_light: SEV2 — search-service /search 5xx at 8.1% (eu-west-1) since 09:12 UTC. Root cause: feature flag new_ranker_v2 (50%) hits a NullPointerException for items missing rank_score; only flagged traffic fails, no deploy involved. Action: disabling the flag now (kill switch, instant, no rollback). ETA: immediate. Follow-up: null-guard + backfill. IC: @oncall-search",
+  "annotation": { "t": 0.61, "label": "flag 50%", "color": "#fade2a" },
+  "ticks": ["09:00", "09:05", "09:10", "09:15", "09:20"],
+  "panels": [
+    {
+      "title": "5xx by endpoint (%)", "stat": "/search 8.1%", "statColor": "#f2495c",
+      "yMax": 10, "yTicks": [0, 2.5, 5, 7.5, 10],
+      "legend": [{ "label": "/search", "color": "#f2495c" }, { "label": "/cart", "color": "#73bf69" }, { "label": "/checkout", "color": "#56d3d8" }],
+      "series": [
+        { "color": "#f2495c", "fill": true, "fillOpacity": 0.14, "width": 2.2, "points": [[0,0.1],[0.3,0.1],[0.31,1.6],[0.6,1.6],[0.61,8.1],[1,8.0]] },
+        { "color": "#73bf69", "width": 1.6, "points": [[0,0.1],[1,0.12]] },
+        { "color": "#56d3d8", "width": 1.6, "points": [[0,0.1],[1,0.1]] }
+      ]
+    },
+    {
+      "title": "feature flag rollout — new_ranker_v2 (%)", "stat": "50%", "statColor": "#fade2a",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#5794f2", "fill": true, "width": 2.2, "points": [[0,0],[0.3,0],[0.31,10],[0.6,10],[0.61,50],[1,50]] }]
+    },
+    {
+      "title": "p99 latency — /search (ms)", "stat": "182 ms", "statColor": "#73bf69",
+      "yMax": 800, "yTicks": [0, 200, 400, 600, 800],
+      "threshold": { "v": 500, "label": "SLO 500ms" },
+      "series": [{ "color": "#73bf69", "fill": true, "fillOpacity": 0.1, "jitter": 12, "points": [[0,150],[0.61,160],[1,182]] }]
+    },
+    {
+      "title": "CPU (%)", "stat": "31%", "statColor": "#73bf69",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#73bf69", "fill": true, "fillOpacity": 0.12, "jitter": 5, "points": [[0,30],[1,31]] }]
+    }
+  ]
+}

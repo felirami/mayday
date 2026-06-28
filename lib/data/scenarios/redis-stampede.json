@@ -1,0 +1,42 @@
+{
+  "id": "redis-stampede",
+  "domain": "ops",
+  "title": "catalog-service latency — Redis evictions after v4.7 deploy",
+  "service": "catalog-service",
+  "severity": "SEV2",
+  "remediationClass": "rollback",
+  "alertText": "[PagerDuty] TRIGGERED · SEV2 · catalog-service\nElevated p95 latency (datadog-monitor #51902)\np95 = 1.61s over last 5m (warn 500ms) · cache hit rate dropped 98.5% -> 41%\nHTTP 5xx = 1.2% · DB read QPS 400 -> 3,800 (9.5x normal)\nEnv: production · Region: us-east-1\nCorrelated change: deploy catalog-service v4.7.0 @ 15:11 UTC\nAck: @oncall-catalog · Opened 15:16 UTC",
+  "dashboardSubtitle": "prod · us-east-1 · 15:00–15:20 UTC",
+  "dashboardSpec": "Grafana 'catalog-service / cache': p95 latency flat ~80ms then climbs to ~1.6s at the v4.7 deploy; cache hit rate collapses 98.5% -> 41%; Redis used_memory pins at the 4GB maxmemory line; DB queries/sec spikes 400 -> 3,800 as reads fall through to Postgres.",
+  "logs": "15:11:04  catalog-service  INFO   Rolling update started: v4.6.2 -> v4.7.0\n15:11:39  catalog-service  INFO   Cache key template changed: 'product:{id}' -> 'product:{id}:{userSegment}'  (per-user variants)\n15:12:20  redis-cache       WARN   used_memory=4.00GB / maxmemory=4.00GB (100%) · maxmemory-policy=allkeys-lru\n15:12:21  redis-cache       WARN   evicted_keys rate climbing: 11,840 keys/s (was ~0)\n15:12:40  catalog-service  INFO   Cache hit rate (1m) = 0.43 (was 0.985)\n15:12:55  catalog-service  WARN   Redis keyspace: 18.6M keys (was 240k) — cardinality up ~77x\n15:13:10  postgres-primary  WARN   read QPS = 3,810/s (baseline ~400); slow query log: SELECT * FROM products WHERE id=$1 (412ms)\n15:13:44  catalog-service  WARN   p95 latency = 1.61s (SLO 500ms)\n15:14:02  redis-cache       INFO   evicted_keys total since 15:12 = 1,940,221\n15:15:10  catalog-service  INFO   CPU 38%, heap 51% — application resources nominal\n15:16:01  cdn-edge          INFO   edge 4xx = 0.3% (nominal)",
+  "runbookMarkdown": "# catalog-service — On-call Runbook\n\n## 1. High latency with falling cache hit rate\nIf p95 rises as cache hit rate drops and DB QPS spikes, reads are falling through to Postgres. Find what changed the cache (key template, TTL, or a deploy) and revert it. Fastest safe mitigation: `kubectl rollout undo deploy/catalog-service`.\n\n## 2. Redis memory exhaustion / evictions\nSymptoms: `used_memory == maxmemory`, `evicted_keys` rate climbing, keyspace cardinality jump. With `allkeys-lru`, Redis evicts hot keys under memory pressure, destroying hit rate. Common trigger: a release that made cache keys higher-cardinality (e.g. per-user), exploding key count. Revert the key-template change, or raise `maxmemory` only if the cardinality increase is intended and memory headroom exists.\n\n## 3. Postgres connection pool exhaustion (DISTRACTOR — verify first)\nApplies when HikariPool `active==max` and Postgres logs `too many clients`. Here the pool is healthy; the DB is busy from cache-miss QPS, not connection-starved.\n\n## 4. CDN / edge errors (DISTRACTOR — verify first)\nApplies to edge 4xx. Edge is nominal (0.3%).",
+  "groundTruthRootCause": "Deploy v4.7.0 changed the product cache key from 'product:{id}' to 'product:{id}:{userSegment}', making cache entries per-user and exploding keyspace cardinality ~77x (240k -> 18.6M keys). Redis hit its 4GB maxmemory and began mass allkeys-lru evictions (~12k keys/s), collapsing the cache hit rate 98.5% -> 41%. Reads fell through to Postgres (QPS 400 -> 3,800), driving p95 to 1.6s. Application CPU/heap are nominal — this is a cache design regression, not a resource leak.",
+  "expectedRemediation": "kubectl rollout undo deploy/catalog-service",
+  "expectedSlackUpdate": ":rotating_light: SEV2 — catalog-service degraded (us-east-1). p95 1.6s, cache hit 41% since 15:11 UTC. Root cause: deploy v4.7 made cache keys per-user, exploding Redis keyspace 77x -> maxmemory evictions -> cache collapse -> DB overload (QPS 9.5x). Action: rolling back v4.7 (reversible). ETA ~5 min. Next update 15:30. IC: @oncall-catalog",
+  "annotation": { "t": 0.55, "label": "deploy v4.7.0" },
+  "ticks": ["15:00", "15:05", "15:10", "15:15", "15:20"],
+  "panels": [
+    {
+      "title": "p95 latency (ms)", "stat": "1.61 s", "statColor": "#f2495c",
+      "yMax": 1800, "yTicks": [0, 400, 800, 1200, 1600],
+      "threshold": { "v": 500, "label": "warn 500ms" },
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 55, "points": [[0,80],[0.55,80],[0.63,1610],[1,1560]] }]
+    },
+    {
+      "title": "cache hit rate (%)", "stat": "41%", "statColor": "#f2495c",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#73bf69", "fill": true, "jitter": 2, "points": [[0,98.5],[0.55,98.5],[0.64,41],[1,42]] }]
+    },
+    {
+      "title": "Redis memory (used vs maxmemory)", "stat": "4.0 / 4.0 GB", "statColor": "#f2495c",
+      "yMax": 4.4, "yTicks": [0, 1, 2, 3, 4],
+      "maxline": { "v": 4, "label": "maxmemory 4GB" },
+      "series": [{ "color": "#5794f2", "fill": true, "jitter": 0.05, "points": [[0,2.1],[0.55,2.3],[0.63,4.0],[1,4.0]] }]
+    },
+    {
+      "title": "DB queries/sec", "stat": "3.8k qps", "statColor": "#f2495c",
+      "yMax": 4500, "yTicks": [0, 1000, 2000, 3000, 4000],
+      "series": [{ "color": "#f2495c", "fill": true, "fillOpacity": 0.14, "jitter": 130, "points": [[0,400],[0.55,420],[0.64,3800],[1,3760]] }]
+    }
+  ]
+}

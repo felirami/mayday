@@ -1,0 +1,50 @@
+{
+  "id": "db-pool",
+  "domain": "ops",
+  "title": "checkout-service p99 latency + 5xx spike after v2.31.0 deploy",
+  "service": "checkout-service",
+  "severity": "SEV2",
+  "remediationClass": "rollback",
+  "alertText": "[PagerDuty] TRIGGERED · SEV2 · checkout-service\nHigh p99 latency (datadog-monitor #48213)\np99 = 2.41s over last 5m (warn 800ms / crit 2s) · sustained > 5m\nHTTP 5xx error rate = 6.8% (baseline 0.1%) · 1,247 failed POST /api/v1/checkout in 5m\nEnv: production · Region: us-east-1 · Cluster: prod-use1-a\nCorrelated change: deploy checkout-service v2.31.0 @ 14:02 UTC (1 release in window)\nAck: @oncall-checkout · Opened 14:07 UTC",
+  "dashboardSubtitle": "prod · us-east-1 · 13:50–14:10 UTC",
+  "dashboardSpec": "Grafana 'checkout-service / overview': p99 latency flat ~120ms then a vertical climb to ~2.4s at the 14:02 deploy marker; 5xx rate fans to 6.8%; HikariPool active pins at 100/100 with pending climbing; requests/sec flat ~1.2k (no traffic surge).",
+  "logs": "14:02:08  checkout-service  INFO   Rolling update started: v2.30.4 -> v2.31.0 (kubectl, 4 replicas)\n14:02:41  checkout-service  INFO   Started CheckoutApplication in 6.41s, listening on :8080\n14:02:41  checkout-service  INFO   HikariPool-1 - configuration: maximumPoolSize=100, minimumIdle=100, connectionTimeout=30000  (prev release v2.30.4: maximumPoolSize=20)\n14:03:01  postgres-primary  LOG    FATAL: sorry, too many clients already\n14:03:01  checkout-service  WARN   HikariPool-1 - Pool stats (total=100, active=100, idle=0, waiting=37)\n14:03:02  checkout-service  ERROR  POST /api/v1/checkout 500 : org.postgresql.util.PSQLException: FATAL: sorry, too many clients already\n14:03:04  checkout-service  ERROR  POST /api/v1/checkout 500 : java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30001ms\n14:03:09  postgres-primary  LOG    FATAL: remaining connection slots are reserved for non-replication superuser connections\n14:03:18  postgres-primary  LOG    parameter \"max_connections\" = 100 (shared across all clients; 4 checkout replicas x 100 pool = 400 requested)\n14:03:55  checkout-service  WARN   HikariPool-1 - Pool stats (total=100, active=100, idle=0, waiting=58)\n14:05:12  postgres-primary  LOG    FATAL: sorry, too many clients already\n14:06:55  redis-cache       INFO   evicted_keys=0, used_memory=412MB/4GB, hit_rate=0.998  (nominal)",
+  "runbookMarkdown": "# checkout-service — On-call Runbook\n\n## 1. High latency / 5xx immediately after a deploy\nApplies when symptoms begin AT a deploy annotation. Treat the release as prime suspect. Fastest safe mitigation: `kubectl rollout undo deploy/checkout-service`.\n\n## 2. Database connection pool exhaustion\nSymptoms: `HikariPool-1` timeouts, pool `active == max` with `idle=0` and growing `waiting`, Postgres `FATAL: sorry, too many clients already` / `remaining connection slots are reserved`.\nPostgres `max_connections = 100`, shared across ALL services and replicas. With N replicas, demand = N x pool `maximumPoolSize`. Most common trigger: a release that RAISED `maximumPoolSize`. Mitigate by rolling back the change or lowering the pool size. Do NOT raise `max_connections` under load.\n\n## 3. Redis cache evictions (DISTRACTOR — verify first)\nApplies ONLY when `redis_evicted_keys` is climbing. If Redis is green (`evicted_keys=0`), not applicable.\n\n## 4. CDN / edge 4xx (DISTRACTOR — verify first)\nApplies to edge 4xx, not origin 5xx on POST routes.",
+  "groundTruthRootCause": "Deploy v2.31.0 raised the HikariCP DB connection pool maximumPoolSize from 20 to 100. Across 4 replicas the fleet requested up to 400 connections against a Postgres primary whose max_connections is 100 (shared), exhausting connection slots and producing connection-timeout latency and 5xx. Config-induced pool exhaustion, not a leak — the smoking gun is the pool-size delta in the v2.31.0 config log.",
+  "expectedRemediation": "kubectl rollout undo deploy/checkout-service",
+  "expectedSlackUpdate": ":rotating_light: SEV2 — checkout-service degraded (us-east-1). p99 2.4s, 5xx 6.8% since 14:02 UTC. Root cause: deploy v2.31.0 raised DB pool 20->100; 4 replicas exhausted Postgres max_connections=100. Action: rolling back to v2.30.4 (reversible). ETA ~5 min. Next update 14:20. IC: @oncall-checkout",
+  "annotation": { "t": 0.6, "label": "deploy v2.31.0" },
+  "ticks": ["13:50", "13:55", "14:00", "14:05", "14:10"],
+  "panels": [
+    {
+      "title": "p99 latency (ms)", "stat": "2.41 s", "statColor": "#f2495c",
+      "yMax": 2700, "yTicks": [0, 800, 1600, 2400],
+      "threshold": { "v": 800, "label": "warn 800ms" },
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 60, "points": [[0,120],[0.6,120],[0.66,2400],[1,2400]] }]
+    },
+    {
+      "title": "HTTP status rate (%)", "stat": "5xx 6.8%", "statColor": "#f2495c",
+      "yMax": 10, "yTicks": [0, 2.5, 5, 7.5, 10],
+      "legend": [{ "label": "2xx 93.2%", "color": "#73bf69" }, { "label": "5xx 6.8%", "color": "#f2495c" }],
+      "series": [
+        { "color": "#73bf69", "fill": true, "fillOpacity": 0.22, "width": 0.1, "points": [[0,9.6],[1,9.6]] },
+        { "color": "#f2495c", "fill": true, "fillOpacity": 0.5, "width": 2, "points": [[0,0.1],[0.6,0.1],[0.64,6.8],[1,6.8]] }
+      ]
+    },
+    {
+      "title": "DB connection pool (HikariPool-1)", "stat": "100 / 100", "statColor": "#f2495c",
+      "yMax": 110, "yTicks": [0, 25, 50, 75, 100],
+      "maxline": { "v": 100, "label": "max 100" },
+      "legend": [{ "label": "active", "color": "#5794f2" }, { "label": "pending", "color": "#ff9830" }],
+      "series": [
+        { "color": "#5794f2", "fill": true, "jitter": 4, "points": [[0,15],[0.6,15],[0.65,100],[1,100]] },
+        { "color": "#ff9830", "width": 2, "jitter": 6, "points": [[0,0],[0.62,0],[0.7,58],[1,58]] }
+      ]
+    },
+    {
+      "title": "requests/sec (RPS)", "stat": "1.20k rps", "statColor": "#73bf69",
+      "yMax": 2000, "yTicks": [0, 500, 1000, 1500, 2000],
+      "series": [{ "color": "#73bf69", "fill": true, "fillOpacity": 0.12, "jitter": 80, "points": [[0,1200],[1,1200]] }]
+    }
+  ]
+}

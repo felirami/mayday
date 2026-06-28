@@ -1,0 +1,41 @@
+{
+  "id": "oom-leak",
+  "domain": "ops",
+  "title": "image-resizer OOMKills + latency after v1.9 deploy",
+  "service": "image-resizer",
+  "severity": "SEV2",
+  "remediationClass": "rollback",
+  "alertText": "[PagerDuty] TRIGGERED · SEV2 · image-resizer\nPod restart storm + intermittent 5xx (datadog-monitor #50774)\nOOMKilled = 14 in 12m · pod restarts = 14 · p99 latency spiking to ~1.8s on each restart\nHTTP 5xx = 2.4% (transient, around restarts) · CPU nominal ~34%\nEnv: production · Region: us-west-2 · Deployment: image-resizer (limit 2Gi)\nCorrelated change: deploy image-resizer v1.9.0 @ 11:08 UTC\nAck: @oncall-media · Opened 11:14 UTC",
+  "dashboardSubtitle": "prod · us-west-2 · 11:00–11:20 UTC",
+  "dashboardSpec": "Grafana 'image-resizer / runtime': container memory sawtooths up to the 2Gi limit and resets (each reset = an OOMKill restart); OOMKilled count steps up to 14; p99 latency spikes at each restart; CPU flat ~34% (resources otherwise nominal). Memory growth begins at the v1.9 deploy marker.",
+  "logs": "11:08:03  image-resizer  INFO   Rolling update started: v1.8.6 -> v1.9.0\n11:08:31  image-resizer  INFO   Dependency upgraded: libvips 8.14 -> 8.16 (image decode/resize)\n11:09:50  image-resizer  WARN   container memory 1.78Gi / 2Gi (89%) and climbing ~14MiB per 100 req\n11:10:12  kubelet        WARN   Memory cgroup out of memory: Killed process (image-resizer), oom_score_adj\n11:10:12  kubelet        WARN   Pod image-resizer-7c9 OOMKilled (reason: OOMKilled, exit 137) — restartCount=1\n11:10:31  image-resizer  ERROR  GET /resize 502 (3 in-flight requests dropped on restart)\n11:11:45  kubelet        WARN   Pod image-resizer-7c9 OOMKilled (exit 137) — restartCount=4\n11:12:30  image-resizer  INFO   heap stable; native/off-heap memory grows monotonically with request count (libvips buffers not freed)\n11:13:50  kubelet        WARN   Pod image-resizer-7c9 OOMKilled (exit 137) — restartCount=10\n11:14:20  image-resizer  INFO   CPU 34%, request rate 220 rps (flat, no traffic spike)\n11:15:02  image-resizer  WARN   OOMKilled total since 11:10 = 14",
+  "runbookMarkdown": "# image-resizer — On-call Runbook\n\n## 1. OOMKill / restart storm\nSymptoms: container memory climbing to the limit, `OOMKilled (exit 137)`, rising restartCount, latency spikes on each restart. If memory grows monotonically with request count and CPU/traffic are flat, suspect a memory leak introduced by a recent change. Fastest safe mitigation: `kubectl rollout undo deploy/image-resizer`. Stopgap only: raise the memory limit to buy time (does not fix the leak).\n\n## 2. Native/off-heap leaks after a dependency bump\nImage/codec libraries (libvips, ImageMagick) allocate off-heap buffers; a version bump can change buffer-freeing behavior and leak per request. Correlate the leak start with the deploy and the dependency delta, then roll the release back.\n\n## 3. Traffic-driven saturation (DISTRACTOR — verify first)\nApplies when request rate spikes. Here rps is flat ~220 — not load.\n\n## 4. CPU throttling (DISTRACTOR — verify first)\nApplies when CPU is pinned at the limit. Here CPU is ~34%.",
+  "groundTruthRootCause": "Deploy v1.9.0 upgraded libvips 8.14 -> 8.16, which leaks off-heap (native) memory per resize request. Container memory climbs ~14MiB/100req to the 2Gi limit, the pod is OOMKilled (exit 137) and restarts — 14 times in 12 minutes — and each restart drops in-flight requests and spikes p99. Heap is stable and CPU/traffic are flat, so this is a native memory leak from the v1.9 dependency bump, not load or a heap issue.",
+  "expectedRemediation": "kubectl rollout undo deploy/image-resizer",
+  "expectedSlackUpdate": ":rotating_light: SEV2 — image-resizer restart storm (us-west-2). 14 OOMKills/12m, p99 spiking to 1.8s since 11:08 UTC. Root cause: deploy v1.9 bumped libvips 8.14->8.16, leaking off-heap memory per request -> 2Gi limit -> OOMKilled restarts. Action: rolling back v1.9 (reversible). ETA ~5 min. Next update 11:30. IC: @oncall-media",
+  "annotation": { "t": 0.4, "label": "deploy v1.9.0" },
+  "ticks": ["11:00", "11:05", "11:10", "11:15", "11:20"],
+  "panels": [
+    {
+      "title": "container memory (Gi)", "stat": "2.0 / 2.0 Gi", "statColor": "#f2495c",
+      "yMax": 2.3, "yTicks": [0, 0.5, 1, 1.5, 2],
+      "maxline": { "v": 2.0, "label": "limit 2Gi" },
+      "series": [{ "color": "#b877d9", "fill": true, "width": 2, "points": [[0,0.55],[0.4,0.62],[0.5,2.0],[0.505,0.4],[0.62,2.0],[0.625,0.4],[0.74,2.0],[0.745,0.42],[0.86,2.0],[0.865,0.45],[1,1.35]] }]
+    },
+    {
+      "title": "OOMKilled (count)", "stat": "14", "statColor": "#f2495c",
+      "yMax": 16, "yTicks": [0, 4, 8, 12, 16],
+      "series": [{ "color": "#f2495c", "fill": true, "width": 2, "points": [[0,0],[0.5,0],[0.505,4],[0.62,4],[0.625,7],[0.74,7],[0.745,10],[0.86,10],[0.865,14],[1,14]] }]
+    },
+    {
+      "title": "p99 latency (ms)", "stat": "1.8 s", "statColor": "#f2495c",
+      "yMax": 2100, "yTicks": [0, 500, 1000, 1500, 2000],
+      "series": [{ "color": "#ff9830", "width": 2, "points": [[0,120],[0.49,150],[0.5,1800],[0.515,170],[0.61,170],[0.62,1750],[0.635,180],[0.73,180],[0.74,1780],[0.755,185],[0.85,185],[0.86,1740],[0.875,200],[1,220]] }]
+    },
+    {
+      "title": "CPU (%)", "stat": "34%", "statColor": "#73bf69",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#73bf69", "fill": true, "fillOpacity": 0.12, "jitter": 5, "points": [[0,33],[1,35]] }]
+    }
+  ]
+}

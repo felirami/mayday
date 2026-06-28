@@ -1,0 +1,44 @@
+{
+  "id": "downstream-dep",
+  "domain": "ops",
+  "title": "payments-service failures — upstream acquirer degraded",
+  "service": "payments-service",
+  "severity": "SEV1",
+  "remediationClass": "failover",
+  "alertText": "[PagerDuty] TRIGGERED · SEV1 · payments-service\nPayment success rate collapse (datadog-monitor #49001)\nsuccess rate 99.3% -> 71% · payment p95 latency 200ms -> 9.0s (timeouts)\nUpstream 'acquirer-gateway' 5xx 0.2% -> 34%, upstream latency climbing\npayments-service CPU 29%, DB pool 18/100 — our resources nominal · no deploy in window\nEnv: production · Region: us-east-1\nAck: @oncall-payments · Opened 22:11 UTC",
+  "dashboardSubtitle": "prod · us-east-1 · 22:00–22:20 UTC",
+  "dashboardSpec": "Grafana 'payments-service / health': payment success rate drops 99.3% -> 71% and payment p95 latency climbs to ~9s at 22:08; the 'acquirer-gateway' upstream 5xx panel spikes 0.2% -> 34%; payments-service's own CPU and DB pool stay flat and low. No deploy marker — the failure originates upstream, not in our service.",
+  "logs": "22:08:04  payments-service  WARN   upstream acquirer-gateway: 502 Bad Gateway (POST /authorize) — 3 retries exhausted\n22:08:31  payments-service  WARN   upstream acquirer-gateway p95 = 9,140ms (was ~180ms); read timeouts rising\n22:08:55  payments-service  ERROR POST /api/v1/charge 504 : upstream timeout calling acquirer-gateway after 9000ms\n22:09:20  acquirer-gateway  STATUS degraded: 34% error rate region us-east (third-party status page: investigating)\n22:09:48  payments-service  INFO   circuit-breaker[acquirer-gateway] state CLOSED->OPEN (error threshold 30% exceeded)\n22:10:15  payments-service  INFO   payment success rate (1m) = 71% (was 99.3%)\n22:10:40  payments-service  INFO   payments-service CPU 29%, heap 47%, DB pool active 18/100 — local resources nominal\n22:11:05  payments-service  INFO   no deployment in window; image digest unchanged since 19:40\n22:12:10  payments-service  INFO   secondary acquirer 'acquirer-backup' healthy (probe 120ms, 0% errors)\n22:13:00  payments-service  WARN   queued 4,210 idempotent charge intents for retry",
+  "runbookMarkdown": "# payments-service — On-call Runbook\n\n## 1. Failures originating from an upstream/third-party dependency\nIf success rate drops and latency times out while OUR resources (CPU, memory, pool) stay nominal and there is NO deploy, the fault is downstream. Do NOT roll back our service — there is nothing wrong with it, and a rollback adds risk without fixing the upstream. Mitigate:\n- Trip the circuit breaker to fail fast instead of timing out.\n- Fail over to the secondary acquirer if healthy: `payments-cli failover --acquirer acquirer-backup`.\n- Queue idempotent charge intents for retry once the upstream recovers.\n- Post to the status page and open a SEV ticket with the vendor.\n\n## 2. Deploy rollback (DISTRACTOR — verify first)\nApplies only when symptoms start at a deploy marker. Here the image digest is unchanged; rolling back is the wrong action.\n\n## 3. DB pool exhaustion (DISTRACTOR — verify first)\nApplies when our pool is `active==max`. Here pool is 18/100 — healthy.",
+  "groundTruthRootCause": "The third-party payment acquirer 'acquirer-gateway' is degraded (34% 5xx and ~9s latency, confirmed on its status page). payments-service calls time out waiting on it, collapsing payment success rate to 71% and p95 to 9s. Our own service is healthy — CPU 29%, DB pool 18/100, no deploy. This is an external dependency outage, not a defect in our code, so the fix is failover/mitigation, NOT a rollback.",
+  "expectedRemediation": "payments-cli failover --acquirer acquirer-backup  (+ keep circuit breaker open; do NOT roll back)",
+  "expectedSlackUpdate": ":rotating_light: SEV1 — payments degraded (us-east-1). Success rate 71%, p95 9s since 22:08 UTC. Root cause: third-party acquirer 'acquirer-gateway' outage (34% 5xx, confirmed on their status page); our service is healthy, no deploy. Action: failing over to acquirer-backup + queuing idempotent retries; circuit breaker open. NOT rolling back (it's not us). Vendor SEV opened. Next update 22:25. IC: @oncall-payments",
+  "annotation": { "t": 0.4, "label": "acquirer degraded", "color": "#ff9830" },
+  "ticks": ["22:00", "22:05", "22:10", "22:15", "22:20"],
+  "panels": [
+    {
+      "title": "payment success rate (%)", "stat": "71%", "statColor": "#f2495c",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 1.5, "points": [[0,99.3],[0.4,99.3],[0.5,71],[1,71]] }]
+    },
+    {
+      "title": "payment p95 latency (ms)", "stat": "9.0 s", "statColor": "#f2495c",
+      "yMax": 10000, "yTicks": [0, 2500, 5000, 7500, 10000],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 250, "points": [[0,200],[0.4,210],[0.52,9000],[1,8800]] }]
+    },
+    {
+      "title": "upstream acquirer-gateway 5xx (%)", "stat": "34%", "statColor": "#f2495c",
+      "yMax": 40, "yTicks": [0, 10, 20, 30, 40],
+      "series": [{ "color": "#ff9830", "fill": true, "jitter": 1.5, "points": [[0,0.2],[0.4,0.2],[0.5,34],[1,33]] }]
+    },
+    {
+      "title": "payments-service resources", "stat": "CPU 29%", "statColor": "#73bf69",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "legend": [{ "label": "CPU %", "color": "#73bf69" }, { "label": "pool active", "color": "#5794f2" }],
+      "series": [
+        { "color": "#73bf69", "fill": true, "fillOpacity": 0.12, "jitter": 4, "points": [[0,28],[1,29]] },
+        { "color": "#5794f2", "width": 2, "jitter": 3, "points": [[0,17],[1,18]] }
+      ]
+    }
+  ]
+}
