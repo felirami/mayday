@@ -4,7 +4,7 @@
 > Judged on organic reach, engagement, content quality, and authentic excitement around **Cerebras + Gemma 4 31B**.
 > **Required on every primary post:** the demo video, tag `@Cerebras` + `@googlegemma`, hashtag `#Gemma4`.
 
-**Placeholders to fill before posting:** `[VIDEO]` `[REPO_URL]` `[LIVE_URL]` `[YOUR_HANDLE]` `[TEAM_HANDLES]`
+**Placeholders to fill before posting:** `[VIDEO]` `https://github.com/felirami/mayday` `https://cerebrasgemma.vercel.app` `[YOUR_HANDLE]` `[TEAM_HANDLES]`
 
 The one-line pitch (memorize it): **An SRE pastes an alert. Six Gemma-4-31B agents on Cerebras swarm it in parallel, argue about the root cause, agree, and hand back a safe rollback command — in seconds.**
 
@@ -152,8 +152,8 @@ Powered start to finish by Gemma 4 31B on @Cerebras. Open source. 🛠️
 ```
 8/ Try it. Break it. Tell us what it gets wrong.
 
-🔗 Live: [LIVE_URL]
-💻 Repo: [REPO_URL]
+🔗 Live: https://cerebrasgemma.vercel.app
+💻 Repo: https://github.com/felirami/mayday
 🎥 Full demo: top of thread
 
 Huge thanks to @Cerebras + @googlegemma for the speed and the model.
@@ -190,8 +190,8 @@ The business case is simple: enterprise downtime is measured in thousands of dol
 Built in 24 hours. Open source.
 
 🎥 Demo: [VIDEO]
-💻 Repo: [REPO_URL]
-🌐 Live: [LIVE_URL]
+💻 Repo: https://github.com/felirami/mayday
+🌐 Live: https://cerebrasgemma.vercel.app
 
 Enormous thanks to the teams at Cerebras and Google DeepMind. #Gemma4 #AI #SRE #DevOps #IncidentResponse #LLM #Cerebras
 ```
@@ -217,8 +217,8 @@ The reason it's usable at all is Cerebras. Gemma 4 31B runs at ~1,000–1,850 to
 
 Demo incident: a deploy raised the Postgres connection pool max 20→100 and exhausted connections; the swarm finds it and proposes `kubectl rollout undo`. Human stays in the loop — it proposes the command, it doesn't run it.
 
-Repo: [REPO_URL]
-Live demo: [LIVE_URL]
+Repo: https://github.com/felirami/mayday
+Live demo: https://cerebrasgemma.vercel.app
 Video: [VIDEO]
 
 Happy to answer questions about the agent orchestration, the prompts that keep the Skeptic honest, or how we wired up vision + logs + retrieval on Gemma 4. Feedback very welcome — especially failure cases.
@@ -258,8 +258,8 @@ SHERLOCK proposes a root cause, DEVIL tries to falsify it ("did you rule out the
 
 **Demo incident:** a deploy raised the Postgres connection pool max 20→100, exhausting connections and spiking checkout latency. Swarm finds it, proposes `kubectl rollout undo`. Human runs the command — agents only propose.
 
-Repo (open source): [REPO_URL]
-Live: [LIVE_URL]
+Repo (open source): https://github.com/felirami/mayday
+Live: https://cerebrasgemma.vercel.app
 Video: [VIDEO]
 
 Happy to share the orchestration code, the system prompts that keep the Skeptic from rubber-stamping, and the vision pipeline. Roast it — I'm especially curious where it falls over on weirder incidents.
