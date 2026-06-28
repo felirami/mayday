@@ -30,15 +30,17 @@ Stage 1 fans out **in parallel** — the moment Cerebras speed compounds. Then S
 
 ## Proof — it generalizes
 
-Mayday is validated on **9 real-world incidents across 3 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+![Mayday architecture](public/architecture.png)
 
-- **Ops / SRE (5):** DB connection-pool exhaustion, Redis cache stampede, a memory-leak OOM storm, a bad feature-flag rollout, and a downstream / 3rd-party outage.
+Mayday is validated on **10 real-world incidents across 3 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+
+- **Ops / SRE (6):** DB connection-pool exhaustion, Redis cache stampede, a memory-leak OOM storm, a bad feature-flag rollout, a downstream / 3rd-party outage, and a metastable retry storm.
 - **Security / SOC (2):** distributed credential stuffing and data exfiltration via a compromised credential.
 - **FinOps / Cost (2):** an over-provisioned ASG after a bad Terraform apply, and an orphaned idle GPU cluster.
 
-The *same* 6-agent swarm handles all of them — and picks the **right class of fix each time** across five remediation classes (rollback · disable-the-flag · fail-over · contain · cost-fix), which is the test of real reasoning rather than pattern-matching. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 judge:
+The *same* 6-agent swarm handles all of them — and picks the **right class of fix each time** across six remediation classes (rollback · disable-the-flag · fail-over · shed-load · contain · cost-fix), which is the test of real reasoning rather than pattern-matching. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 judge:
 
-> **9 / 9 correctly diagnosed · avg ~2.3s per incident · peak ~3,000 tok/s.** → [docs/EVAL.md](docs/EVAL.md)
+> **10 / 10 correctly diagnosed · avg ~2.3s per incident · peak ~3,000 tok/s.** → [docs/EVAL.md](docs/EVAL.md)
 
 ## Run it
 

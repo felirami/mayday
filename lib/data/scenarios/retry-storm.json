@@ -1,0 +1,44 @@
+{
+  "id": "retry-storm",
+  "domain": "ops",
+  "title": "orders-service stuck in a retry storm after a brief DB blip",
+  "service": "orders-service",
+  "severity": "SEV1",
+  "remediationClass": "shed-load",
+  "alertText": "[PagerDuty] TRIGGERED · SEV1 · orders-service\nSustained 5xx + saturation (datadog-monitor #47120)\n5xx = 41% (stuck high) · incoming traffic flat ~2,000 rps but TOTAL load 9,000 rps\nRetry ratio: 5% -> 78% of all requests are retries · thread pool saturated\nDownstream DB latency spiked at 20:14 for ~25s then RECOVERED — yet errors persist\nEnv: production · Region: us-east-1\nAck: @oncall-orders · Opened 20:18 UTC",
+  "dashboardSubtitle": "prod · us-east-1 · 20:05–20:25 UTC",
+  "dashboardSpec": "Grafana 'orders-service / health': a brief DB-latency blip at 20:14 (spikes then returns to baseline within ~25s); but 5xx jumps to ~41% and STAYS high after the DB recovers; total request rate balloons to ~9,000 rps while real incoming traffic is flat ~2,000 (the rest is retries); retry ratio climbs 5% -> 78%. The trigger is gone but the system is stuck — a self-sustaining retry storm.",
+  "logs": "20:14:02  db-primary      WARN   failover initiated (primary -> replica); brief unavailability\n20:14:05  orders-service  ERROR  POST /api/v1/orders 503 : downstream db timeout (1200ms)\n20:14:09  orders-service  INFO   retry policy: maxRetries=5, backoff=NONE, jitter=false (retries fire immediately)\n20:14:27  db-primary      INFO   failover complete; db latency back to ~8ms (RECOVERED)\n20:14:30  orders-service  WARN   incoming rps=2,010 but total rps (incl. retries)=8,940 — retry amplification ~4.4x\n20:15:00  orders-service  WARN   retry ratio = 78% of all requests; thread pool active=200/200, queue=1,900\n20:15:40  orders-service  ERROR  5xx = 41% and steady; new requests starve behind retried requests\n20:16:10  orders-service  INFO   db latency = 9ms (healthy); errors are NOT from the DB anymore — they are from self-inflicted saturation\n20:17:30  orders-service  INFO   prior restart attempt at 20:16 did not help — pods re-saturate within seconds from the retry backlog",
+  "runbookMarkdown": "# orders-service — On-call Runbook\n\n## 1. Retry storm / metastable failure\nSymptoms: a brief trigger (a downstream blip) has RECOVERED, but errors stay high; total request rate >> real incoming traffic; retry ratio is high; thread pool saturated. The system is amplifying its own load via retries and won't recover on its own. RESTARTING DOES NOT HELP — pods re-saturate from the retry backlog. Break the amplification:\n- Shed load (load shedder / temporarily reject a fraction) to drain the backlog: `ordersctl loadshed enable --target 70%`.\n- Fix the retry policy: exponential backoff + jitter + a retry budget: `ordersctl retry-policy set --backoff exp --jitter --max-retries 2`.\n- Once the retry ratio falls and the queue drains, ramp traffic back.\n\n## 2. Downstream DB outage (DISTRACTOR — verify first)\nApplies when the DB is STILL unhealthy. Here the DB recovered at 20:14:27 (latency ~9ms); the DB is not the ongoing cause.\n\n## 3. Deploy rollback (DISTRACTOR — verify first)\nNo deploy in the window; there is nothing to roll back.",
+  "groundTruthRootCause": "A ~25s DB failover blip at 20:14 caused initial timeouts. Because the client retry policy uses no backoff and no jitter (maxRetries=5), failed requests retried immediately and piled up, amplifying load ~4.4x (incoming ~2,000 rps but total ~9,000 rps, retry ratio 78%) and saturating the thread pool. The DB recovered within 25s, but orders-service is now stuck in a self-sustaining retry storm (metastable failure) — the ongoing 41% 5xx is from self-inflicted saturation, not the DB. A restart does not help because pods re-saturate from the backlog.",
+  "expectedRemediation": "ordersctl loadshed enable --target 70% && ordersctl retry-policy set --backoff exp --jitter --max-retries 2",
+  "expectedSlackUpdate": ":rotating_light: SEV1 — orders-service stuck in a retry storm since 20:14 UTC. A 25s DB blip recovered, but no-backoff retries amplified load 4.4x (78% retries, 9k rps on 2k real) and the service is now self-saturating (5xx 41%). Restart didn't help. Action: enabling load shedding (target 70%) + switching retries to exponential backoff w/ jitter + retry budget to drain the backlog. NOT a DB or deploy issue. Next update 20:35. IC: @oncall-orders",
+  "annotation": { "t": 0.45, "label": "DB blip recovered — errors persist", "color": "#fade2a" },
+  "ticks": ["20:05", "20:10", "20:15", "20:20", "20:25"],
+  "panels": [
+    {
+      "title": "request rate (rps)", "stat": "9.0k total", "statColor": "#f2495c",
+      "yMax": 10000, "yTicks": [0, 2500, 5000, 7500, 10000],
+      "legend": [{ "label": "total (incl retries)", "color": "#f2495c" }, { "label": "real incoming", "color": "#73bf69" }],
+      "series": [
+        { "color": "#f2495c", "fill": true, "fillOpacity": 0.14, "jitter": 220, "points": [[0,2010],[0.45,2010],[0.55,8940],[1,8900]] },
+        { "color": "#73bf69", "width": 2, "jitter": 60, "points": [[0,2000],[1,2010]] }
+      ]
+    },
+    {
+      "title": "5xx error rate (%)", "stat": "5xx 41%", "statColor": "#f2495c",
+      "yMax": 60, "yTicks": [0, 15, 30, 45, 60],
+      "series": [{ "color": "#f2495c", "fill": true, "jitter": 1.5, "points": [[0,0.2],[0.45,0.2],[0.55,41],[1,40]] }]
+    },
+    {
+      "title": "retry ratio (% of requests)", "stat": "78%", "statColor": "#ff9830",
+      "yMax": 100, "yTicks": [0, 25, 50, 75, 100],
+      "series": [{ "color": "#ff9830", "fill": true, "jitter": 2, "points": [[0,5],[0.45,5],[0.56,78],[1,77]] }]
+    },
+    {
+      "title": "downstream DB latency (ms)", "stat": "9 ms · recovered", "statColor": "#73bf69",
+      "yMax": 1400, "yTicks": [0, 350, 700, 1050, 1400],
+      "series": [{ "color": "#5794f2", "width": 2, "points": [[0,8],[0.42,8],[0.45,1200],[0.52,9],[1,9]] }]
+    }
+  ]
+}

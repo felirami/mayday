@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4b5160"/>
+    </marker>
+    <style>
+      .box{ rx:10; }
+      .lbl{ fill:#8b909c; font-size:13px; letter-spacing:1px; }
+      .name{ font-size:16px; font-weight:700; }
+      .sub{ fill:#8b909c; font-size:12px; }
+      .stage{ fill:#6b7180; font-size:12px; font-weight:700; letter-spacing:1px; }
+      .flow{ stroke:#4b5160; stroke-width:2; fill:none; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="760" fill="#07080a"/>
+  <text x="48" y="56" fill="#e6e8ee" font-size="30" font-weight="800" letter-spacing="-0.5">Mayday — architecture</text>
+  <text x="48" y="84" fill="#8b909c" font-size="16">A multimodal diagnostic swarm: read the signals → fan out → synthesize → adversarially verify → decide → execute.</text>
+
+  <!-- ===== Row 1: the swarm ===== -->
+  <!-- Intake -->
+  <text x="60" y="150" class="stage">MULTIMODAL INTAKE</text>
+  <g>
+    <rect x="48" y="166" width="190" height="46" rx="10" fill="#12151b" stroke="#2a2e33"/>
+    <text x="66" y="194" class="name" fill="#e6e8ee">📊 Dashboard PNG</text>
+    <rect x="48" y="222" width="190" height="46" rx="10" fill="#12151b" stroke="#2a2e33"/>
+    <text x="66" y="250" class="name" fill="#e6e8ee">📜 Logs</text>
+    <rect x="48" y="278" width="190" height="46" rx="10" fill="#12151b" stroke="#2a2e33"/>
+    <text x="66" y="306" class="name" fill="#e6e8ee">📚 Runbook</text>
+  </g>
+
+  <!-- Stage 1 parallel -->
+  <text x="300" y="150" class="stage">STAGE 1 · PARALLEL TRIAGE</text>
+  <g>
+    <rect x="288" y="166" width="210" height="46" rx="10" fill="#12151b" stroke="#38bdf8"/>
+    <text x="306" y="188" class="name" fill="#38bdf8">👁️ OPTIC</text>
+    <text x="306" y="205" class="sub">reads the dashboard (vision)</text>
+    <rect x="288" y="222" width="210" height="46" rx="10" fill="#12151b" stroke="#a78bfa"/>
+    <text x="306" y="244" class="name" fill="#a78bfa">📜 TRACE</text>
+    <text x="306" y="261" class="sub">hunts the logs</text>
+    <rect x="288" y="278" width="210" height="46" rx="10" fill="#12151b" stroke="#34d399"/>
+    <text x="306" y="300" class="name" fill="#34d399">📚 ARCHIVE</text>
+    <text x="306" y="317" class="sub">matches the runbook</text>
+  </g>
+
+  <!-- Stage 2 SHERLOCK -->
+  <text x="548" y="150" class="stage">STAGE 2</text>
+  <rect x="548" y="200" width="170" height="92" rx="10" fill="#12151b" stroke="#fbbf24"/>
+  <text x="566" y="240" class="name" fill="#fbbf24">🧠 SHERLOCK</text>
+  <text x="566" y="262" class="sub">root-cause</text>
+  <text x="566" y="279" class="sub">hypothesis</text>
+
+  <!-- Stage 3 DEVIL -->
+  <text x="768" y="150" class="stage">STAGE 3</text>
+  <rect x="768" y="200" width="170" height="92" rx="10" fill="#12151b" stroke="#f87171"/>
+  <text x="786" y="240" class="name" fill="#f87171">🛡️ DEVIL</text>
+  <text x="786" y="262" class="sub">adversarially</text>
+  <text x="786" y="279" class="sub">challenges it</text>
+
+  <!-- Stage 4 MAYDAY -->
+  <text x="988" y="150" class="stage">STAGE 4 · DECISION</text>
+  <rect x="988" y="184" width="220" height="124" rx="10" fill="#12151b" stroke="#fb7185"/>
+  <text x="1006" y="214" class="name" fill="#fb7185">📣 MAYDAY</text>
+  <text x="1006" y="236" class="sub">strict JSON: severity,</text>
+  <text x="1006" y="253" class="sub">timeline, safe command,</text>
+  <text x="1006" y="270" class="sub">rollback risk, Slack update</text>
+  <text x="1006" y="294" class="sub" fill="#fb7185">structured outputs</text>
+
+  <!-- Row 1 arrows -->
+  <path class="flow" d="M242,245 C265,245 265,245 284,245" marker-end="url(#arrow)"/>
+  <path class="flow" d="M502,245 C525,245 525,245 544,245" marker-end="url(#arrow)"/>
+  <path class="flow" d="M722,246 C742,246 742,246 764,246" marker-end="url(#arrow)"/>
+  <path class="flow" d="M942,246 C962,246 962,246 984,246" marker-end="url(#arrow)"/>
+
+  <!-- MAYDAY down into the action loop -->
+  <path class="flow" d="M1098,312 C1098,360 700,360 700,404" marker-end="url(#arrow)"/>
+
+  <!-- ===== Row 2: the action loop (human-in-the-loop + tool execution) ===== -->
+  <text x="300" y="396" class="stage">STAGE 5 · GUARDED EXECUTION (human-in-the-loop + tool-calling)</text>
+  <rect x="600" y="408" width="200" height="70" rx="10" fill="#12151b" stroke="#34d399"/>
+  <text x="618" y="440" class="name" fill="#34d399">👤 Approve / Reject</text>
+  <text x="618" y="460" class="sub">on-call engineer signs off</text>
+
+  <rect x="850" y="408" width="240" height="70" rx="10" fill="#12151b" stroke="#56d3d8"/>
+  <text x="868" y="436" class="name" fill="#56d3d8">🛠️ OPERATOR</text>
+  <text x="868" y="456" class="sub">tool-calls: apply_remediation()</text>
+  <text x="868" y="471" class="sub">→ verify_recovery()</text>
+
+  <rect x="1140" y="408" width="170" height="70" rx="10" fill="#12151b" stroke="#34d399"/>
+  <text x="1158" y="440" class="name" fill="#34d399">✅ RESOLVED</text>
+  <text x="1158" y="460" class="sub">+ audit log</text>
+
+  <path class="flow" d="M804,443 C820,443 820,443 846,443" marker-end="url(#arrow)"/>
+  <path class="flow" d="M1094,443 C1110,443 1110,443 1136,443" marker-end="url(#arrow)"/>
+
+  <!-- ===== Footer banner ===== -->
+  <rect x="48" y="560" width="1304" height="150" rx="12" fill="#0e1014" stroke="#1f2430"/>
+  <text x="76" y="600" fill="#fb7185" font-size="20" font-weight="800">⚡ Gemma 4 31B on Cerebras</text>
+  <text x="76" y="628" fill="#8b909c" font-size="15">Whole swarm in ~2 seconds · peak ~3,000 tokens/sec · live Cerebras-vs-GPU speed race (≈20× faster).</text>
+  <text x="76" y="654" fill="#8b909c" font-size="15">OpenAI-compatible API · base64 image input · strict structured outputs · tool calling · per-request time_info telemetry.</text>
+  <text x="76" y="686" fill="#34d399" font-size="15" font-weight="700">Validated: 10/10 incidents correctly diagnosed across 3 domains (Ops · Security · FinOps), 6 remediation classes — graded by a Gemma-4 judge.</text>
+
+  <!-- right-side stack: UI surfaces -->
+  <text x="980" y="600" class="stage">SURFACES</text>
+  <text x="980" y="624" fill="#8b909c" font-size="14">• Next.js war-room console (SSE streaming)</text>
+  <text x="980" y="646" fill="#8b909c" font-size="14">• /clip portrait demo reel</text>
+  <text x="980" y="668" fill="#8b909c" font-size="14">• scripts/eval.mjs accuracy harness</text>
+  <text x="980" y="690" fill="#8b909c" font-size="14">• per-IP rate limiting · deployed on Vercel</text>
+</svg>

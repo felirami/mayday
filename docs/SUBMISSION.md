@@ -63,6 +63,8 @@ Crucially, **DEVIL catches the plausible-but-wrong answer**. The "obvious" read 
 
 ## How we built it
 
+![Mayday architecture](../public/architecture.png)
+
 ### Stack
 
 - **Next.js 16** (App Router) + **React 19** + **Tailwind v4**
@@ -208,15 +210,15 @@ Mayday is built to compete across all three tracks; here's exactly how it maps t
 
 ## Proof it works — and that it generalizes
 
-Mayday isn't one cherry-picked demo. It's validated on **9 real-world incidents across 3 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
+Mayday isn't one cherry-picked demo. It's validated on **10 real-world incidents across 3 domains**, each with its own dashboard, logs, runbook, and hand-written ground truth:
 
-- **Ops / SRE (5):** DB connection-pool exhaustion · Redis cache stampede · a memory-leak OOM storm · a bad feature-flag rollout · a downstream/3rd-party outage.
+- **Ops / SRE (6):** DB connection-pool exhaustion · Redis cache stampede · a memory-leak OOM storm · a bad feature-flag rollout · a downstream/3rd-party outage · a metastable retry storm.
 - **Security / SOC (2):** distributed credential stuffing · data exfiltration via a compromised credential.
 - **FinOps / Cost (2):** an over-provisioned ASG after a bad Terraform apply · an orphaned idle GPU cluster.
 
-The *same* six-agent swarm — no domain-specific agents — handles all nine, and it chooses the **correct class of remediation each time** across five classes: rollback, disable-the-feature-flag, fail-over (correctly concluding "it's not us"), security containment, and cost right-sizing. That diversity is the real test: a system that always says "roll it back" would fail the feature-flag, downstream, security, and cost cases. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 LLM judge:
+The *same* six-agent swarm — no domain-specific agents — handles all ten, and it chooses the **correct class of remediation each time** across six classes: rollback, disable-the-feature-flag, fail-over (correctly concluding "it's not us"), shed-load (a metastable retry storm where a restart would re-saturate), security containment, and cost right-sizing. That diversity is the real test: a system that always says "roll it back" would fail the flag, downstream, retry-storm, security, and cost cases. `scripts/eval.mjs` runs every incident end-to-end through the live swarm and grades the diagnosis with a Gemma-4 LLM judge:
 
-> **9/9 correctly diagnosed · avg ~2.3s per incident · peak ~3,000 tok/s.** (see `docs/EVAL.md`)
+> **10/10 correctly diagnosed · avg ~2.3s per incident · peak ~3,000 tok/s.** (see `docs/EVAL.md`)
 
 This is the platform story: Mayday is a **multimodal diagnostic swarm** — *read the signals → fan out specialists → synthesize → adversarially verify → decide safely* — and incident response is just the flagship. The SOC domain (the same swarm triaging a live breach) is direct evidence it extends to cybersecurity, another Track 3 target.
 

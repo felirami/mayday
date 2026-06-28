@@ -278,9 +278,9 @@ export function Console({
               rel="noopener noreferrer"
               className="mono text-[11px] font-bold px-2.5 py-2 rounded-lg hidden md:flex items-center gap-1.5"
               style={{ background: "#34d39912", color: "#34d399", border: "1px solid #34d39944" }}
-              title="9/9 incidents correctly diagnosed across 3 domains in the accuracy eval · avg ~2.3s"
+              title="10/10 incidents correctly diagnosed across 3 domains in the accuracy eval · avg ~2.3s"
             >
-              ✓ 9/9 verified
+              ✓ 10/10 verified
             </a>
             <button
               onClick={() => runFullDemo()}

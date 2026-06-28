@@ -8,6 +8,7 @@ import redis from "./data/scenarios/redis-stampede.json";
 import oom from "./data/scenarios/oom-leak.json";
 import flag from "./data/scenarios/feature-flag.json";
 import dep from "./data/scenarios/downstream-dep.json";
+import retryStorm from "./data/scenarios/retry-storm.json";
 import credStuffing from "./data/scenarios/cred-stuffing.json";
 import dataExfil from "./data/scenarios/data-exfil.json";
 import costSpike from "./data/scenarios/finops-cost-spike.json";
@@ -37,6 +38,7 @@ const ALL = [
   oom,
   flag,
   dep,
+  retryStorm,
   credStuffing,
   dataExfil,
   costSpike,
