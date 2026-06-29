@@ -1,7 +1,12 @@
 // The Mayday orchestrator: fans the swarm out across 4 stages and emits a
 // live event stream the UI renders in real time.
 import { AGENTS, STAGE1, systemPrompt } from "./agents";
-import { runCommander, streamAgent, type ChatContent } from "./cerebras";
+import {
+  runCommander,
+  streamAgent,
+  type ChatContent,
+  type Provider,
+} from "./cerebras";
 import type { AgentId, IncidentInput, StreamEvent, Timing } from "./types";
 
 type Emit = (e: StreamEvent) => void;
@@ -39,7 +44,8 @@ function stage1User(id: AgentId, input: IncidentInput): ChatContent {
 export async function runIncident(
   input: IncidentInput,
   emit: Emit,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  provider?: Provider
 ): Promise<void> {
   const wallStart = Date.now();
   const timings: Timing[] = [];
@@ -82,6 +88,7 @@ export async function runIncident(
         reasoningEffort: reasoning,
         onDelta: (t) => emit({ type: "agent_delta", id, text: t }),
         signal,
+        provider,
       });
       findings[id] = text;
       timings.push(timing);
@@ -122,6 +129,7 @@ export async function runIncident(
       systemPrompt: systemPrompt("commander"),
       user: commanderUser,
       signal,
+      provider,
     });
     timings.push(timing);
     peakTps = Math.max(peakTps, timing.tokensPerSec);

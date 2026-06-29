@@ -1,5 +1,5 @@
-// Cerebras Inference client (OpenAI-compatible) for Gemma 4 31B.
-// All Mayday agents run through this module.
+// Provider-aware inference for Gemma 4 31B. The same swarm can run on Cerebras
+// or on a GPU provider (OpenRouter) so the UI can race the *real* dispatch.
 import OpenAI from "openai";
 import type { CommanderReport, Timing } from "./types";
 
@@ -23,9 +23,46 @@ export function hasCerebrasKey(): boolean {
   return Boolean(process.env.CEREBRAS_API_KEY);
 }
 
+/** A model endpoint the swarm can run on. */
+export interface Provider {
+  client: OpenAI;
+  model: string;
+  isCerebras: boolean;
+  label: string;
+  /** OpenRouter ordered provider pin, comma-separated. */
+  providerPin?: string;
+}
+
+export function cerebrasProvider(): Provider {
+  return { client: cerebras(), model: MODEL, isCerebras: true, label: "Cerebras" };
+}
+
+/** The GPU baseline (same Gemma 4 31B model) via an OpenAI-compatible endpoint. */
+export function gpuProvider(): Provider | null {
+  const apiKey = process.env.BASELINE_API_KEY;
+  const baseURL = process.env.BASELINE_BASE_URL;
+  const model = process.env.BASELINE_MODEL;
+  if (!apiKey || !baseURL || !model) return null;
+  return {
+    client: new OpenAI({ apiKey, baseURL }),
+    model,
+    isCerebras: false,
+    label: process.env.BASELINE_LABEL ?? "GPU",
+    providerPin: process.env.BASELINE_PROVIDER || undefined,
+  };
+}
+
 /** ~4 chars/token fallback when usage isn't reported. */
 function estimateTokens(text: string): number {
   return Math.max(1, Math.round(text.length / 4));
+}
+
+function providerRouting(p: Provider): Record<string, unknown> | undefined {
+  if (p.isCerebras || !p.providerPin) return undefined;
+  return {
+    order: p.providerPin.split(",").map((s) => s.trim()).filter(Boolean),
+    allow_fallbacks: false,
+  };
 }
 
 export type ChatContent =
@@ -43,6 +80,7 @@ export interface StreamAgentOpts {
   temperature?: number;
   onDelta?: (text: string) => void;
   signal?: AbortSignal;
+  provider?: Provider;
 }
 
 export interface StreamAgentResult {
@@ -50,14 +88,9 @@ export interface StreamAgentResult {
   timing: Timing;
 }
 
-/**
- * Stream a single agent turn, capturing TTFT + Cerebras `time_info` so the UI
- * can show the real generation throughput.
- */
-export async function streamAgent(
-  opts: StreamAgentOpts
-): Promise<StreamAgentResult> {
-  const client = cerebras();
+/** Stream a single agent turn on the given provider, capturing TTFT + throughput. */
+export async function streamAgent(opts: StreamAgentOpts): Promise<StreamAgentResult> {
+  const provider = opts.provider ?? cerebrasProvider();
   const start = Date.now();
   let firstTokenAt: number | null = null;
   let text = "";
@@ -66,19 +99,25 @@ export async function streamAgent(
   let cerebrasGenSeconds: number | null = null;
 
   const params: Record<string, unknown> = {
-    model: MODEL,
+    model: provider.model,
     messages: [
       { role: "system", content: opts.systemPrompt },
       { role: "user", content: opts.user },
     ],
     stream: true,
     stream_options: { include_usage: true },
-    reasoning_effort: opts.reasoningEffort ?? "none",
     max_completion_tokens: opts.maxTokens ?? 900,
     temperature: opts.temperature ?? 0.3,
   };
+  if (provider.isCerebras) {
+    params.reasoning_effort = opts.reasoningEffort ?? "none";
+  } else {
+    params.max_tokens = opts.maxTokens ?? 900;
+    const routing = providerRouting(provider);
+    if (routing) params.provider = routing;
+  }
 
-  const stream = (await client.chat.completions.create(params as never, {
+  const stream = (await provider.client.chat.completions.create(params as never, {
     signal: opts.signal,
   })) as unknown as AsyncIterable<any>;
 
@@ -100,8 +139,7 @@ export async function streamAgent(
   const totalMs = Date.now() - start;
   const ttftMs = firstTokenAt ? firstTokenAt - start : totalMs;
   const completionTokens = usageCompletion || estimateTokens(text);
-  const genSeconds =
-    cerebrasGenSeconds ?? Math.max(0.001, (totalMs - ttftMs) / 1000);
+  const genSeconds = cerebrasGenSeconds ?? Math.max(0.001, (totalMs - ttftMs) / 1000);
   const tokensPerSec = completionTokens / Math.max(0.001, genSeconds);
 
   return {
@@ -112,9 +150,7 @@ export async function streamAgent(
       completionTokens,
       promptTokens:
         usagePrompt ||
-        estimateTokens(
-          typeof opts.user === "string" ? opts.user : JSON.stringify(opts.user)
-        ),
+        estimateTokens(typeof opts.user === "string" ? opts.user : JSON.stringify(opts.user)),
       tokensPerSec,
     },
   };
@@ -135,10 +171,7 @@ const COMMANDER_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        properties: {
-          t: { type: "string" },
-          event: { type: "string" },
-        },
+        properties: { t: { type: "string" }, event: { type: "string" } },
         required: ["t", "event"],
       },
     },
@@ -166,45 +199,75 @@ const COMMANDER_SCHEMA = {
   ],
 } as const;
 
+const COMMANDER_JSON_HINT = `\n\nRespond with ONLY a single JSON object (no prose, no markdown fences) of exactly this shape:\n{"severity":"SEV1|SEV2|SEV3","headline":"...","rootCause":"...","blastRadius":"...","confidence":0-100,"timeline":[{"t":"HH:MM","event":"..."}],"remediation":{"command":"...","rationale":"...","rollbackRisk":"low|medium|high"},"slackUpdate":"..."}`;
+
+function parseJsonLoose(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    /* try harder */
+  }
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) {
+    try {
+      return JSON.parse(fence[1]);
+    } catch {
+      /* continue */
+    }
+  }
+  const a = s.indexOf("{");
+  const b = s.lastIndexOf("}");
+  if (a >= 0 && b > a) return JSON.parse(s.slice(a, b + 1));
+  throw new Error("could not parse commander JSON");
+}
+
 export interface CommanderResult {
   report: CommanderReport;
   timing: Timing;
 }
 
-/** The Commander uses strict structured outputs for a guaranteed-shape decision. */
+/** The Commander's final structured decision. Strict schema on Cerebras; a
+ * prompt-instructed + leniently-parsed JSON on other providers (max compat). */
 export async function runCommander(opts: {
   systemPrompt: string;
   user: string;
   signal?: AbortSignal;
+  provider?: Provider;
 }): Promise<CommanderResult> {
-  const client = cerebras();
+  const provider = opts.provider ?? cerebrasProvider();
   const start = Date.now();
 
-  const resp = (await client.chat.completions.create(
-    {
-      model: MODEL,
-      messages: [
-        { role: "system", content: opts.systemPrompt },
-        { role: "user", content: opts.user },
-      ],
-      reasoning_effort: "none",
-      max_completion_tokens: 1300,
-      temperature: 0.2,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "incident_report",
-          strict: true,
-          schema: COMMANDER_SCHEMA,
-        },
+  const params: Record<string, unknown> = {
+    model: provider.model,
+    messages: [
+      { role: "system", content: opts.systemPrompt },
+      {
+        role: "user",
+        content: provider.isCerebras ? opts.user : opts.user + COMMANDER_JSON_HINT,
       },
-    } as never,
-    { signal: opts.signal }
-  )) as any;
+    ],
+    max_completion_tokens: 1300,
+    temperature: 0.2,
+  };
+  if (provider.isCerebras) {
+    params.reasoning_effort = "none";
+    params.response_format = {
+      type: "json_schema",
+      json_schema: { name: "incident_report", strict: true, schema: COMMANDER_SCHEMA },
+    };
+  } else {
+    params.max_tokens = 1300;
+    const routing = providerRouting(provider);
+    if (routing) params.provider = routing;
+  }
+
+  const resp = (await provider.client.chat.completions.create(params as never, {
+    signal: opts.signal,
+  })) as any;
 
   const totalMs = Date.now() - start;
   const content: string = resp?.choices?.[0]?.message?.content ?? "{}";
-  const report = JSON.parse(content) as CommanderReport;
+  const report = parseJsonLoose(content) as CommanderReport;
   const ti = resp?.time_info;
   const usage = resp?.usage;
   const completionTokens = usage?.completion_tokens ?? estimateTokens(content);

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { hasCerebrasKey } from "@/lib/cerebras";
+import { cerebrasProvider, gpuProvider, hasCerebrasKey } from "@/lib/cerebras";
 import { runIncident } from "@/lib/orchestrator";
 import { DEFAULT_SCENARIO_ID, scenarioIncident } from "@/lib/scenarios";
 import { clientKey, rateLimit } from "@/lib/ratelimit";
@@ -45,6 +45,16 @@ export async function POST(req: NextRequest) {
         imageMime: typeof body.imageMime === "string" ? body.imageMime : undefined,
       };
 
+  // Which provider to run the swarm on: Cerebras (default) or the GPU baseline.
+  const wantGpu = body?.provider === "gpu";
+  const provider = wantGpu ? gpuProvider() : cerebrasProvider();
+  if (wantGpu && !provider) {
+    return Response.json(
+      { error: "GPU baseline is not configured (set BASELINE_* env)." },
+      { status: 503 }
+    );
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -56,7 +66,7 @@ export async function POST(req: NextRequest) {
         }
       };
       try {
-        await runIncident(input, emit, req.signal);
+        await runIncident(input, emit, req.signal, provider ?? undefined);
       } catch (e) {
         emit({ type: "fatal", message: (e as Error).message });
       } finally {

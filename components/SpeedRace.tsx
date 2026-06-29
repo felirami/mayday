@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { streamSSE } from "@/lib/sse";
 import { CEREBRAS_LABEL } from "@/lib/raceLabels";
 import type { RaceEvent, Timing } from "@/lib/types";
+import { Markdown } from "./Markdown";
 
 const TARGET_TOKENS = 700;
 
@@ -199,9 +200,11 @@ export function SpeedRace({
                   scrollRefs.current[label] = el;
                   if (el) el.scrollTop = el.scrollHeight;
                 }}
-                className="stream-scroll px-4 py-2 text-[11.5px] leading-relaxed h-[180px] overflow-y-auto whitespace-pre-wrap text-[var(--text)] opacity-90 border-t border-[var(--border)]"
+                className="stream-scroll px-4 py-2 text-[11.5px] leading-relaxed h-[180px] overflow-y-auto text-[var(--text)] opacity-90 border-t border-[var(--border)]"
               >
-                {l?.text || (
+                {l?.text ? (
+                  <Markdown>{l.text}</Markdown>
+                ) : (
                   <span className="text-[var(--sub)] italic">
                     {running ? "" : "ready — hit run race"}
                   </span>

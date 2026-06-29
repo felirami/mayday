@@ -11,7 +11,7 @@ import type {
 import { AgentCard, type AgentCardState } from "./AgentCard";
 import { SpeedHud } from "./SpeedHud";
 import { CommanderPanel } from "./CommanderPanel";
-import { SpeedRace } from "./SpeedRace";
+import { DispatchRace } from "./DispatchRace";
 import { RemediationPanel } from "./RemediationPanel";
 
 type AgentMap = Record<AgentId, AgentCardState>;
@@ -305,8 +305,13 @@ export function Console({
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 py-5 flex flex-col gap-5">
-        {/* Full-width side-by-side speed race — the hero */}
-        <SpeedRace baselineLabel={baselineLabel} triggerStart={raceSignal} />
+        {/* Full-width side-by-side dispatch race (same swarm, Cerebras vs GPU) — the hero */}
+        <DispatchRace
+          scenarioId={scenarioId}
+          hasKey={hasKey}
+          gpuLabel={baselineLabel}
+          triggerStart={raceSignal}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <section className="lg:col-span-4 flex flex-col gap-4">
