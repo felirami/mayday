@@ -112,11 +112,11 @@ export function ProviderColumn({
             </div>
             <div className="text-[8.5px] text-[var(--sub)] uppercase tracking-wider">agents</div>
           </div>
-          <div className="hidden sm:block">
-            <div className="text-xl font-bold tabular-nums leading-none" style={{ color: accent }}>
+          <div>
+            <div className={`text-xl font-bold tabular-nums leading-none ${lane.doneMs && isCer ? "glow-num" : ""}`} style={{ color: accent }}>
               {lane.peakTps ? Math.round(lane.peakTps).toLocaleString() : "—"}
             </div>
-            <div className="text-[8.5px] text-[var(--sub)] uppercase tracking-wider">peak t/s</div>
+            <div className="text-[8.5px] text-[var(--sub)] uppercase tracking-wider">tok/s</div>
           </div>
         </div>
       </div>
@@ -173,15 +173,18 @@ export function ProviderColumn({
             </div>
           </div>
         ) : (
-          <div className="panel p-4 text-center text-[11px] text-[var(--sub)]">
+          <div className="panel p-4 text-center text-[12px]">
             {lane.error ? (
               <span className="text-[var(--red)]">{lane.error}</span>
             ) : lane.running ? (
-              <span style={{ color: accent }}>
-                {isCer ? "deciding…" : "still working — GPU is slow (that's the point)"}
+              <span style={{ color: accent }} className="inline-flex items-center gap-2">
+                <span className="blink">◉</span>
+                {lane.agents.commander.status === "running"
+                  ? `📣 MAYDAY composing the structured decision… ${(elapsed / 1000).toFixed(1)}s${isCer ? "" : " (the big generation — slow on GPU)"}`
+                  : `diagnosing… ${doneCount}/6 agents`}
               </span>
             ) : (
-              "awaiting dispatch"
+              <span className="text-[var(--sub)]">awaiting dispatch</span>
             )}
           </div>
         )}

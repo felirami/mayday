@@ -176,6 +176,20 @@ export function Console({ hasKey, baselineLabel }: { hasKey: boolean; baselineLa
             </div>
           </div>
           <div className="flex items-center gap-2.5">
+            {(cer.peakTps > 0 || gpu.peakTps > 0) && (
+              <span
+                className="mono text-[12px] font-bold px-2.5 py-1.5 rounded-lg hidden md:flex items-center gap-1.5"
+                style={{ background: "var(--panel-2)", border: "1px solid var(--border)" }}
+                title="peak output tokens/sec — same model, Gemma 4 31B"
+              >
+                <span style={{ color: "#34d399" }}>
+                  🟢 {cer.peakTps ? Math.round(cer.peakTps).toLocaleString() : "—"}
+                </span>
+                <span className="text-[var(--sub)]">vs</span>
+                <span style={{ color: "#fb7185" }}>🐢 {gpu.peakTps ? Math.round(gpu.peakTps) : "—"}</span>
+                <span className="text-[var(--sub)]">tok/s</span>
+              </span>
+            )}
             {speedup && (
               <span
                 className={`mono text-sm font-bold px-2.5 py-1.5 rounded-lg ${!gpu.running ? "glow-num" : ""}`}

@@ -246,7 +246,7 @@ export async function runCommander(opts: {
         content: provider.isCerebras ? opts.user : opts.user + COMMANDER_JSON_HINT,
       },
     ],
-    max_completion_tokens: 1300,
+    max_completion_tokens: 900,
     temperature: 0.2,
   };
   if (provider.isCerebras) {
@@ -256,7 +256,7 @@ export async function runCommander(opts: {
       json_schema: { name: "incident_report", strict: true, schema: COMMANDER_SCHEMA },
     };
   } else {
-    params.max_tokens = 1300;
+    params.max_tokens = 900;
     const routing = providerRouting(provider);
     if (routing) params.provider = routing;
   }
